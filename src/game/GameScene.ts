@@ -22,6 +22,19 @@ const EDGE_BASE_BRIGHTNESS = 0.55;
 const EDGE_CELEBRATE_BRIGHTNESS = 2.2;
 const SYMBOL_CONNECTED_INTENSITY = 0.7;
 const SYMBOL_CELEBRATE_INTENSITY = 2.4;
+const GLOW_TRANSITION_MS = 420;
+
+/** Overshoots slightly past the target before settling — a springy "pop" for the glow transitions. */
+function easeOutBack(t: number): number {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  const x = t - 1;
+  return 1 + c3 * x * x * x + c1 * x * x;
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
+}
 
 const COLOR = {
   floor: 0x1c2038,
@@ -40,6 +53,12 @@ interface CubeAnim {
   duration: number;
 }
 
+interface GlowValues {
+  symbol: number;
+  edge: number;
+  decal: number;
+}
+
 interface CubeEntry {
   group: THREE.Group;
   topMaterial: THREE.MeshStandardMaterial;
@@ -47,6 +66,9 @@ interface CubeEntry {
   glowDecal: THREE.Mesh;
   glowDecalMaterial: THREE.MeshBasicMaterial;
   baseColor: THREE.Color;
+  glowFrom: GlowValues;
+  glowTo: GlowValues;
+  glowStart: number;
 }
 
 function createSymbolTexture(shape: Parameters<typeof drawSymbol>[1], bgColor: string): THREE.CanvasTexture {
@@ -364,7 +386,18 @@ export class GameScene {
       glowDecal.position.set(wx, FLOOR_Y + 0.02, wz);
       this.levelGroup.add(glowDecal);
 
-      this.cubes.set(cube.id, { group, topMaterial: topMat, edgeMaterial: edgeMat, glowDecal, glowDecalMaterial, baseColor });
+      const baseline: GlowValues = { symbol: 0, edge: EDGE_BASE_BRIGHTNESS, decal: 0 };
+      this.cubes.set(cube.id, {
+        group,
+        topMaterial: topMat,
+        edgeMaterial: edgeMat,
+        glowDecal,
+        glowDecalMaterial,
+        baseColor,
+        glowFrom: { ...baseline },
+        glowTo: { ...baseline },
+        glowStart: 0,
+      });
     });
   }
 
@@ -461,16 +494,34 @@ export class GameScene {
     }
   }
 
-  private updateGlow() {
+  private updateGlow(now: number) {
     this.cubes.forEach((entry, id) => {
       const connected = this.glowingIds.has(id);
-      const symbolIntensity = this.celebrating ? SYMBOL_CELEBRATE_INTENSITY : connected ? SYMBOL_CONNECTED_INTENSITY : 0;
-      const edgeBrightness = this.celebrating ? EDGE_CELEBRATE_BRIGHTNESS : EDGE_BASE_BRIGHTNESS;
+      const target: GlowValues = {
+        symbol: this.celebrating ? SYMBOL_CELEBRATE_INTENSITY : connected ? SYMBOL_CONNECTED_INTENSITY : 0,
+        edge: this.celebrating ? EDGE_CELEBRATE_BRIGHTNESS : EDGE_BASE_BRIGHTNESS,
+        decal: this.celebrating ? 0.85 : connected ? 0.45 : 0,
+      };
+
+      if (target.symbol !== entry.glowTo.symbol || target.edge !== entry.glowTo.edge || target.decal !== entry.glowTo.decal) {
+        // Target changed mid-transition — restart the tween from wherever it currently is, so it doesn't jump.
+        const t0 = easeOutBack(Math.min(1, (now - entry.glowStart) / GLOW_TRANSITION_MS));
+        entry.glowFrom = {
+          symbol: lerp(entry.glowFrom.symbol, entry.glowTo.symbol, t0),
+          edge: lerp(entry.glowFrom.edge, entry.glowTo.edge, t0),
+          decal: lerp(entry.glowFrom.decal, entry.glowTo.decal, t0),
+        };
+        entry.glowTo = target;
+        entry.glowStart = now;
+      }
+
+      const t = easeOutBack(Math.min(1, (now - entry.glowStart) / GLOW_TRANSITION_MS));
+      const symbolIntensity = Math.max(0, lerp(entry.glowFrom.symbol, entry.glowTo.symbol, t));
+      const edgeBrightness = Math.max(0, lerp(entry.glowFrom.edge, entry.glowTo.edge, t));
+      const decalOpacity = Math.min(1, Math.max(0, lerp(entry.glowFrom.decal, entry.glowTo.decal, t)));
 
       entry.topMaterial.emissiveIntensity = symbolIntensity;
       entry.edgeMaterial.color.copy(entry.baseColor).multiplyScalar(edgeBrightness);
-
-      const decalOpacity = this.celebrating ? 0.85 : connected ? 0.45 : 0;
       entry.glowDecalMaterial.opacity = decalOpacity;
       entry.glowDecal.position.x = entry.group.position.x;
       entry.glowDecal.position.z = entry.group.position.z;
@@ -484,7 +535,7 @@ export class GameScene {
   render() {
     const now = performance.now();
     this.updateAnims(now);
-    this.updateGlow();
+    this.updateGlow(now);
     this.renderer.render(this.scene, this.camera);
   }
 }

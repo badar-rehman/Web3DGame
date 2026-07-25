@@ -23,65 +23,91 @@ export function cubeVisual(id: string): CubeVisual {
   return CUBE_PALETTE[id] ?? { color: 0xffffff, cssColor: '#ffffff', symbol: 'circle', glyph: '?' };
 }
 
-/** Draws a cube's symbol into a 2D canvas context, centered in a `size`x`size` box. */
-export function drawSymbol(ctx: CanvasRenderingContext2D, shape: SymbolShape, size: number, fgColor: string) {
+/** Builds the outline path for a symbol, centered in a `size`x`size` box. */
+function buildSymbolPath(shape: SymbolShape, size: number): Path2D {
   const c = size / 2;
   const r = size * 0.3;
-  ctx.fillStyle = fgColor;
-  ctx.strokeStyle = fgColor;
-  ctx.lineWidth = size * 0.08;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
+  const path = new Path2D();
 
   switch (shape) {
     case 'circle':
-      ctx.beginPath();
-      ctx.arc(c, c, r, 0, Math.PI * 2);
-      ctx.fill();
+      path.arc(c, c, r, 0, Math.PI * 2);
       break;
     case 'square':
-      ctx.fillRect(c - r, c - r, r * 2, r * 2);
+      path.rect(c - r, c - r, r * 2, r * 2);
       break;
     case 'diamond':
-      ctx.beginPath();
-      ctx.moveTo(c, c - r * 1.2);
-      ctx.lineTo(c + r * 1.2, c);
-      ctx.lineTo(c, c + r * 1.2);
-      ctx.lineTo(c - r * 1.2, c);
-      ctx.closePath();
-      ctx.fill();
+      path.moveTo(c, c - r * 1.2);
+      path.lineTo(c + r * 1.2, c);
+      path.lineTo(c, c + r * 1.2);
+      path.lineTo(c - r * 1.2, c);
+      path.closePath();
       break;
     case 'triangle':
-      ctx.beginPath();
-      ctx.moveTo(c, c - r * 1.25);
-      ctx.lineTo(c + r * 1.15, c + r * 0.8);
-      ctx.lineTo(c - r * 1.15, c + r * 0.8);
-      ctx.closePath();
-      ctx.fill();
+      path.moveTo(c, c - r * 1.25);
+      path.lineTo(c + r * 1.15, c + r * 0.8);
+      path.lineTo(c - r * 1.15, c + r * 0.8);
+      path.closePath();
       break;
     case 'star': {
       const spikes = 5;
       const outerR = r * 1.25;
       const innerR = r * 0.5;
-      ctx.beginPath();
       for (let i = 0; i < spikes * 2; i++) {
         const radius = i % 2 === 0 ? outerR : innerR;
         const angle = (Math.PI / spikes) * i - Math.PI / 2;
         const px = c + Math.cos(angle) * radius;
         const py = c + Math.sin(angle) * radius;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+        if (i === 0) path.moveTo(px, py);
+        else path.lineTo(px, py);
       }
-      ctx.closePath();
-      ctx.fill();
+      path.closePath();
       break;
     }
     case 'plus': {
       const arm = r * 0.42;
       const len = r * 1.2;
-      ctx.fillRect(c - arm, c - len, arm * 2, len * 2);
-      ctx.fillRect(c - len, c - arm, len * 2, arm * 2);
+      // A single 12-point outline so a stroke traces a clean plus shape
+      // instead of two overlapping rectangles.
+      const pts: [number, number][] = [
+        [c - arm, c - len],
+        [c + arm, c - len],
+        [c + arm, c - arm],
+        [c + len, c - arm],
+        [c + len, c + arm],
+        [c + arm, c + arm],
+        [c + arm, c + len],
+        [c - arm, c + len],
+        [c - arm, c + arm],
+        [c - len, c + arm],
+        [c - len, c - arm],
+        [c - arm, c - arm],
+      ];
+      pts.forEach(([px, py], i) => (i === 0 ? path.moveTo(px, py) : path.lineTo(px, py)));
+      path.closePath();
       break;
     }
   }
+  return path;
+}
+
+/** Fills a cube's symbol into a 2D canvas context, centered in a `size`x`size` box. */
+export function drawSymbol(ctx: CanvasRenderingContext2D, shape: SymbolShape, size: number, fgColor: string) {
+  ctx.fillStyle = fgColor;
+  ctx.fill(buildSymbolPath(shape, size));
+}
+
+/** Strokes a cube's symbol as a carved outline into a 2D canvas context. */
+export function drawSymbolOutline(
+  ctx: CanvasRenderingContext2D,
+  shape: SymbolShape,
+  size: number,
+  strokeColor: string,
+  lineWidth: number,
+) {
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = lineWidth;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+  ctx.stroke(buildSymbolPath(shape, size));
 }

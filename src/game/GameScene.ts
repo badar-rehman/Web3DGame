@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CellType, CubeState, LevelData } from './types';
-import { cubeVisual, drawSymbol } from './cubeVisuals';
+import { SymbolShape, cubeVisual, drawSymbolOutline } from './cubeVisuals';
 
 export const CELL_SIZE = 1.5;
 const FLOOR_Y = 0.1;
@@ -9,6 +9,8 @@ const WALL_HEIGHT = 1.1;
 const OBSTACLE_HEIGHT = 0.65;
 const CUBE_SIZE = 0.92;
 const MOVE_DURATION_MS = 160;
+const MOVE_STAGGER_MS = 30;
+const MOVE_OVERSHOOT = 0.55;
 const COYOTE_MS = 230;
 const FALL_DURATION_MS = 620;
 const FALL_DROP = 14;
@@ -24,12 +26,11 @@ const SYMBOL_CONNECTED_INTENSITY = 0.7;
 const SYMBOL_CELEBRATE_INTENSITY = 2.4;
 const GLOW_TRANSITION_MS = 420;
 
-/** Overshoots slightly past the target before settling — a springy "pop" for the glow transitions. */
-function easeOutBack(t: number): number {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
+/** Overshoots slightly past the target before settling — a springy "pop". */
+function easeOutBack(t: number, overshoot = 1.70158): number {
+  const c3 = overshoot + 1;
   const x = t - 1;
-  return 1 + c3 * x * x * x + c1 * x * x;
+  return 1 + c3 * x * x * x + overshoot * x * x;
 }
 
 function lerp(a: number, b: number, t: number): number {
@@ -61,7 +62,7 @@ interface GlowValues {
 
 interface CubeEntry {
   group: THREE.Group;
-  topMaterial: THREE.MeshStandardMaterial;
+  faceMaterials: THREE.MeshStandardMaterial[];
   edgeMaterial: THREE.MeshBasicMaterial;
   glowDecal: THREE.Mesh;
   glowDecalMaterial: THREE.MeshBasicMaterial;
@@ -71,18 +72,82 @@ interface CubeEntry {
   glowStart: number;
 }
 
-function createSymbolTexture(shape: Parameters<typeof drawSymbol>[1], bgColor: string): THREE.CanvasTexture {
-  const size = 128;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = bgColor;
-  ctx.fillRect(0, 0, size, size);
-  drawSymbol(ctx, shape, size, 'rgba(11, 14, 26, 0.85)');
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
+interface SeamTexturePair {
+  base: THREE.CanvasTexture;
+  emissive: THREE.CanvasTexture;
+}
+
+const SEAM_TEX_SIZE = 128;
+const SEAM_INSET = SEAM_TEX_SIZE * 0.08;
+const SEAM_BASE_COLOR = 'rgba(15, 18, 32, 0.4)';
+const SEAM_BASE_WIDTH = 3.5;
+const SEAM_GLOW_WIDTH = 5;
+
+/**
+ * A cube face is built from two textures: a light base fill with faint
+ * carved grooves, and a matching "emissive map" — black everywhere except
+ * those same groove lines, drawn bright white. Only the masked lines glow
+ * when the material's emissiveIntensity rises, so the light visibly comes
+ * out of the carved lines rather than washing the whole face.
+ */
+function buildSeamTextures(draw: (ctx: CanvasRenderingContext2D, emissive: boolean) => void): SeamTexturePair {
+  const size = SEAM_TEX_SIZE;
+
+  const baseCanvas = document.createElement('canvas');
+  baseCanvas.width = baseCanvas.height = size;
+  const baseCtx = baseCanvas.getContext('2d')!;
+  baseCtx.fillStyle = '#eef0f8';
+  baseCtx.fillRect(0, 0, size, size);
+  draw(baseCtx, false);
+
+  const emCanvas = document.createElement('canvas');
+  emCanvas.width = emCanvas.height = size;
+  const emCtx = emCanvas.getContext('2d')!;
+  emCtx.fillStyle = '#000000';
+  emCtx.fillRect(0, 0, size, size);
+  draw(emCtx, true);
+
+  const base = new THREE.CanvasTexture(baseCanvas);
+  base.colorSpace = THREE.SRGBColorSpace;
+  const emissive = new THREE.CanvasTexture(emCanvas);
+  emissive.colorSpace = THREE.SRGBColorSpace;
+  return { base, emissive };
+}
+
+function strokeInsetBorder(ctx: CanvasRenderingContext2D, emissive: boolean) {
+  ctx.strokeStyle = emissive ? '#ffffff' : SEAM_BASE_COLOR;
+  ctx.lineWidth = emissive ? SEAM_GLOW_WIDTH : SEAM_BASE_WIDTH;
+  ctx.strokeRect(SEAM_INSET, SEAM_INSET, SEAM_TEX_SIZE - SEAM_INSET * 2, SEAM_TEX_SIZE - SEAM_INSET * 2);
+}
+
+/** Side faces: an inset border plus a 2x2 cross seam, like carved panel plating. */
+function buildSideTextures(): SeamTexturePair {
+  return buildSeamTextures((ctx, emissive) => {
+    strokeInsetBorder(ctx, emissive);
+    const mid = SEAM_TEX_SIZE / 2;
+    ctx.beginPath();
+    ctx.moveTo(mid, SEAM_INSET);
+    ctx.lineTo(mid, SEAM_TEX_SIZE - SEAM_INSET);
+    ctx.moveTo(SEAM_INSET, mid);
+    ctx.lineTo(SEAM_TEX_SIZE - SEAM_INSET, mid);
+    ctx.strokeStyle = emissive ? '#ffffff' : SEAM_BASE_COLOR;
+    ctx.lineWidth = emissive ? SEAM_GLOW_WIDTH : SEAM_BASE_WIDTH;
+    ctx.stroke();
+  });
+}
+
+/** Top face: an inset border plus the cube's symbol carved as an outline (never filled). */
+const topTextureCache = new Map<SymbolShape, SeamTexturePair>();
+function getTopTextures(shape: SymbolShape): SeamTexturePair {
+  let pair = topTextureCache.get(shape);
+  if (!pair) {
+    pair = buildSeamTextures((ctx, emissive) => {
+      strokeInsetBorder(ctx, emissive);
+      drawSymbolOutline(ctx, shape, SEAM_TEX_SIZE, emissive ? '#ffffff' : SEAM_BASE_COLOR, emissive ? 5.5 : 4);
+    });
+    topTextureCache.set(shape, pair);
+  }
+  return pair;
 }
 
 function createGlowTexture(): THREE.CanvasTexture {
@@ -140,6 +205,7 @@ const BOX_EDGES: [THREE.Vector3, THREE.Vector3][] = (() => {
 })();
 
 const GLOW_TEXTURE = createGlowTexture();
+const SIDE_TEXTURES = buildSideTextures();
 
 export class GameScene {
   private renderer: THREE.WebGLRenderer;
@@ -352,13 +418,26 @@ export class GameScene {
       const baseColor = new THREE.Color(visual.color);
       const group = new THREE.Group();
 
-      const sideMat = new THREE.MeshStandardMaterial({ color: visual.color, roughness: 0.45, metalness: 0.1 });
-      const topMat = new THREE.MeshStandardMaterial({
-        map: createSymbolTexture(visual.symbol, visual.cssColor),
-        roughness: 0.3,
-        metalness: 0.1,
+      const topTex = getTopTextures(visual.symbol);
+      // Base color map tints the near-white carved texture to this cube's
+      // hue; emissiveMap masks the glow to just the carved lines/outline.
+      const sideMat = new THREE.MeshStandardMaterial({
+        map: SIDE_TEXTURES.base,
+        emissiveMap: SIDE_TEXTURES.emissive,
         emissive: baseColor,
         emissiveIntensity: 0,
+        color: baseColor,
+        roughness: 0.55,
+        metalness: 0.08,
+      });
+      const topMat = new THREE.MeshStandardMaterial({
+        map: topTex.base,
+        emissiveMap: topTex.emissive,
+        emissive: baseColor,
+        emissiveIntensity: 0,
+        color: baseColor,
+        roughness: 0.5,
+        metalness: 0.08,
       });
       // BoxGeometry face group order: +x, -x, +y (top), -y (bottom), +z, -z
       const body = new THREE.Mesh(bodyGeo, [sideMat, sideMat, topMat, sideMat, sideMat, sideMat]);
@@ -389,7 +468,7 @@ export class GameScene {
       const baseline: GlowValues = { symbol: 0, edge: EDGE_BASE_BRIGHTNESS, decal: 0 };
       this.cubes.set(cube.id, {
         group,
-        topMaterial: topMat,
+        faceMaterials: [topMat, sideMat],
         edgeMaterial: edgeMat,
         glowDecal,
         glowDecalMaterial,
@@ -410,17 +489,20 @@ export class GameScene {
   }
 
   /**
-   * Animate cubes to new grid positions. A cube that ends up outside the
-   * level bounds (an open edge with no boundary) first slides out over the
-   * empty space at normal height and hangs there briefly — coyote time —
-   * before gravity takes over and it drops away. Calls onSettled once every
-   * animation finishes.
+   * Animate cubes to new grid positions. Each cube's move starts a beat
+   * after the previous one (a tiny stagger) rather than all snapping at
+   * once, and eases with a slight overshoot-and-settle for a springier,
+   * more satisfying feel. A cube that ends up outside the level bounds (an
+   * open edge with no boundary) first slides out over the empty space at
+   * normal height and hangs there briefly — coyote time — before gravity
+   * takes over and it drops away. Calls onSettled once every animation
+   * finishes.
    */
   animateCubesTo(positions: CubeState[], onSettled: () => void) {
     const now = performance.now();
     this.onSettled = onSettled;
     this.animating = true;
-    positions.forEach((pos) => {
+    positions.forEach((pos, index) => {
       const entry = this.cubes.get(pos.id);
       if (!entry) return;
       const falling = this.isOutOfBounds(pos);
@@ -430,7 +512,7 @@ export class GameScene {
         phase: falling ? 'slide' : 'move',
         from: entry.group.position.clone(),
         to,
-        start: now,
+        start: now + index * MOVE_STAGGER_MS,
         duration: MOVE_DURATION_MS,
       });
     });
@@ -469,8 +551,8 @@ export class GameScene {
         continue;
       }
 
-      const t = Math.min(1, (now - anim.start) / anim.duration);
-      const eased = anim.phase === 'drop' ? t * t : 1 - Math.pow(1 - t, 3);
+      const t = Math.max(0, Math.min(1, (now - anim.start) / anim.duration));
+      const eased = anim.phase === 'drop' ? t * t : easeOutBack(t, MOVE_OVERSHOOT);
       entry.group.position.lerpVectors(anim.from, anim.to, eased);
       if (anim.phase === 'drop') {
         entry.group.rotation.x += 0.14;
@@ -520,7 +602,9 @@ export class GameScene {
       const edgeBrightness = Math.max(0, lerp(entry.glowFrom.edge, entry.glowTo.edge, t));
       const decalOpacity = Math.min(1, Math.max(0, lerp(entry.glowFrom.decal, entry.glowTo.decal, t)));
 
-      entry.topMaterial.emissiveIntensity = symbolIntensity;
+      entry.faceMaterials.forEach((mat) => {
+        mat.emissiveIntensity = symbolIntensity;
+      });
       entry.edgeMaterial.color.copy(entry.baseColor).multiplyScalar(edgeBrightness);
       entry.glowDecalMaterial.opacity = decalOpacity;
       entry.glowDecal.position.x = entry.group.position.x;

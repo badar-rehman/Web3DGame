@@ -18,12 +18,21 @@ const BUMP_DISTANCE = CELL_SIZE * 0.08;
 const BUMP_OUT_MS = 75;
 const BUMP_BACK_MS = 130;
 
-// The camera looks toward the level from this fixed diagonal direction.
+// The camera looks toward the level from this fixed diagonal direction,
+// rotated 30° around the vertical axis from the plain corner view — this
+// pulls the grid's up/down/left/right axes closer to the screen's own
+// up/down/left/right so swipe direction reads less ambiguously, and it
+// changes the level's on-screen footprint enough to help it fit in frame.
 // Background cubes scatter around a full ring for even left/right coverage,
 // then any that land in front of the stage get pushed straight back along
 // -CAMERA_DIR until they clear a safety margin — guaranteeing every cube
 // renders behind the level no matter where it started.
-const CAMERA_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
+const CAMERA_TILT_DEG = 30;
+const CAMERA_DIR = new THREE.Vector3(1, 1.2, 1)
+  .normalize()
+  // Negative here is what actually reads as an anticlockwise turn on screen
+  // (and is the direction that pulls grid up/right toward screen up/right).
+  .applyAxisAngle(new THREE.Vector3(0, 1, 0), THREE.MathUtils.degToRad(-CAMERA_TILT_DEG));
 const BG_BEHIND_MARGIN = 6;
 
 interface BgLayer {
@@ -473,9 +482,48 @@ export class GameScene {
     const distance = span * 1.6 + 10;
     this.camera.position.copy(center.clone().addScaledVector(CAMERA_DIR, distance));
     this.camera.lookAt(center);
+    this.camera.updateMatrixWorld();
 
-    const halfSize = span * 0.72 + 2.2;
+    // Project every corner of the level's bounding box (including boundary
+    // pipe/cube height) onto the camera's actual screen-space right/up axes,
+    // rather than assuming a fixed-angle diamond — this keeps everything in
+    // frame regardless of CAMERA_TILT_DEG or a level's width/height ratio.
+    const { width, height } = this.level;
+    const xMin = -0.5 * CELL_SIZE;
+    const xMax = (width - 0.5) * CELL_SIZE;
+    const zMin = -0.5 * CELL_SIZE;
+    const zMax = (height - 0.5) * CELL_SIZE;
+    const yMin = FLOOR_Y - FLOOR_TILE_HEIGHT;
+    const yMax = FLOOR_Y + CUBE_SIZE;
+
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
+    this.camera.matrixWorld.extractBasis(right, up, new THREE.Vector3());
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    const corner = new THREE.Vector3();
+    for (const x of [xMin, xMax]) {
+      for (const y of [yMin, yMax]) {
+        for (const z of [zMin, zMax]) {
+          corner.set(x, y, z).sub(center);
+          const sx = corner.dot(right);
+          const sy = corner.dot(up);
+          minX = Math.min(minX, sx);
+          maxX = Math.max(maxX, sx);
+          minY = Math.min(minY, sy);
+          maxY = Math.max(maxY, sy);
+        }
+      }
+    }
+
+    const PADDING = 1.8;
     const aspect = this.renderer.domElement.clientWidth / Math.max(1, this.renderer.domElement.clientHeight);
+    const halfW = Math.max(Math.abs(minX), Math.abs(maxX)) + PADDING;
+    const halfH = Math.max(Math.abs(minY), Math.abs(maxY)) + PADDING;
+    const halfSize = Math.max(halfH, halfW / aspect);
     this.camera.left = -halfSize * aspect;
     this.camera.right = halfSize * aspect;
     this.camera.top = halfSize;

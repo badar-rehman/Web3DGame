@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Cube Shift — A 3D Puzzle Game</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game-canvas"></canvas>
+
+      <div id="hud">
+        <div id="hud-top">
+          <div id="level-label">Level 1</div>
+          <div id="move-counter">Moves: 0</div>
+          <button id="restart-btn" title="Restart level">⟲ Restart</button>
+        </div>
+
+        <div id="goal-panel">
+          <div id="goal-title">Goal</div>
+          <div id="goal-grid"></div>
+        </div>
+
+        <button id="levels-btn" title="Level select">☰ Levels</button>
+      </div>
+
+      <div id="win-overlay" class="hidden">
+        <div id="win-card">
+          <h2>Level Complete!</h2>
+          <p id="win-moves"></p>
+          <div id="win-actions">
+            <button id="next-level-btn">Next Level →</button>
+            <button id="replay-level-btn">Replay</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="level-select-overlay" class="hidden">
+        <div id="level-select-card">
+          <div id="level-select-header">
+            <h2>Select Level</h2>
+            <button id="close-level-select-btn">✕</button>
+          </div>
+          <div id="level-select-grid"></div>
+        </div>
+      </div>
+
+      <div id="swipe-hint">Swipe or use arrow keys to slide the cubes</div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

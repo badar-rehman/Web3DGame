@@ -14,17 +14,40 @@ const MOVE_OVERSHOOT = 0.55;
 const COYOTE_MS = 230;
 const FALL_DURATION_MS = 620;
 const FALL_DROP = 14;
-const BUMP_DISTANCE = CELL_SIZE * 0.16;
+const BUMP_DISTANCE = CELL_SIZE * 0.08;
 const BUMP_OUT_MS = 75;
 const BUMP_BACK_MS = 130;
 
-const BG_CUBE_COUNT = 26;
-const BG_RADIUS_MIN = 9;
-const BG_RADIUS_MAX = 24;
-const BG_HEIGHT_MIN = -11;
-const BG_HEIGHT_MAX = 15;
+// The camera looks toward the level from this fixed diagonal direction.
+// Background cubes scatter around a full ring for even left/right coverage,
+// then any that land in front of the stage get pushed straight back along
+// -CAMERA_DIR until they clear a safety margin — guaranteeing every cube
+// renders behind the level no matter where it started.
+const CAMERA_DIR = new THREE.Vector3(1, 1.2, 1).normalize();
+const BG_BEHIND_MARGIN = 6;
+
+interface BgLayer {
+  count: number;
+  radiusMin: number;
+  radiusMax: number;
+  heightMin: number;
+  heightMax: number;
+  sizeMin: number;
+  sizeMax: number;
+  darken: number; // 0 = full color, 1 = fully black — deeper layers are darker for depth cueing
+}
+
+// Three depth bands (near/mid/far) instead of one flat scatter, so the
+// swarm reads as layers floating at different depths rather than a single
+// random cloud.
+const BG_LAYERS: BgLayer[] = [
+  { count: 8, radiusMin: 10, radiusMax: 15, heightMin: -7, heightMax: 3, sizeMin: 1.4, sizeMax: 3.2, darken: 0.15 },
+  { count: 9, radiusMin: 15, radiusMax: 21, heightMin: -10, heightMax: 4, sizeMin: 2.2, sizeMax: 4.4, darken: 0.4 },
+  { count: 9, radiusMin: 21, radiusMax: 28, heightMin: -12, heightMax: 5, sizeMin: 3, sizeMax: 6, darken: 0.62 },
+];
 const BG_DARK_COLORS = [0x1a2038, 0x202a4a, 0x161b30, 0x252f52];
 const BG_ACCENT_COLORS = [0x6ee7f5, 0xf5b26e, 0xf56ea8, 0x8af56e, 0xf5e26e, 0xa56ef5];
+const BG_ACCENT_EVERY = 7;
 
 const PIPE_RADIUS = 0.07;
 const PIPE_Y = FLOOR_Y + 0.32;
@@ -296,49 +319,63 @@ export class GameScene {
   }
 
   /**
-   * A slow-drifting swarm of large, dim cubes scattered around the play
-   * area — pure atmosphere. Kept dark and low-opacity (mostly faded further
-   * by fog) with a few faint accent-colored ones mixed in, so it reads as
-   * background depth rather than competing with the actual puzzle.
+   * A slow-drifting swarm of large, solid cubes scattered in three depth
+   * layers behind the play area — pure atmosphere. Every cube is placed
+   * within a wide arc directly behind the stage (relative to the camera's
+   * fixed viewing direction) and then nudged further back if needed, so
+   * none of them can ever render in front of the level. Deeper layers are
+   * darker and bigger, which — combined with the scene fog — reads as
+   * depth even though the orthographic camera has no perspective falloff.
    */
   private buildBackgroundField() {
-    for (let i = 0; i < BG_CUBE_COUNT; i++) {
-      const isAccent = i % 7 === 0;
-      const size = THREE.MathUtils.randFloat(1.6, 5.2);
-      const geo = new THREE.BoxGeometry(size, size, size);
-      const color = isAccent
-        ? BG_ACCENT_COLORS[Math.floor(Math.random() * BG_ACCENT_COLORS.length)]
-        : BG_DARK_COLORS[Math.floor(Math.random() * BG_DARK_COLORS.length)];
-      const material = new THREE.MeshStandardMaterial({
-        color,
-        roughness: 1,
-        metalness: 0,
-        transparent: true,
-        opacity: isAccent ? 0.16 : 0.5,
-      });
-      const mesh = new THREE.Mesh(geo, material);
+    let index = 0;
+    BG_LAYERS.forEach((layer) => {
+      for (let i = 0; i < layer.count; i++, index++) {
+        const isAccent = index % BG_ACCENT_EVERY === 0;
+        const size = THREE.MathUtils.randFloat(layer.sizeMin, layer.sizeMax);
+        const geo = new THREE.BoxGeometry(size, size, size);
+        const color = new THREE.Color(
+          isAccent
+            ? BG_ACCENT_COLORS[Math.floor(Math.random() * BG_ACCENT_COLORS.length)]
+            : BG_DARK_COLORS[Math.floor(Math.random() * BG_DARK_COLORS.length)],
+        );
+        // Accent cubes are naturally brighter/more saturated than the dark
+        // palette, so they get extra darkening on top of the layer's own
+        // depth darkening to stay a faint contrast note, not a focal point.
+        color.multiplyScalar(1 - layer.darken).multiplyScalar(isAccent ? 0.5 : 1);
+        const material = new THREE.MeshStandardMaterial({ color, roughness: 1, metalness: 0 });
+        const mesh = new THREE.Mesh(geo, material);
 
-      const angle = Math.random() * Math.PI * 2;
-      const radius = THREE.MathUtils.randFloat(BG_RADIUS_MIN, BG_RADIUS_MAX);
-      const height = THREE.MathUtils.randFloat(BG_HEIGHT_MIN, BG_HEIGHT_MAX);
-      const basePosition = new THREE.Vector3(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
-      mesh.position.copy(basePosition);
-      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        const angle = Math.random() * Math.PI * 2;
+        const radius = THREE.MathUtils.randFloat(layer.radiusMin, layer.radiusMax);
+        const height = THREE.MathUtils.randFloat(layer.heightMin, layer.heightMax);
+        const basePosition = new THREE.Vector3(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
 
-      this.bgGroup.add(mesh);
-      this.bgCubes.push({
-        mesh,
-        basePosition,
-        spin: new THREE.Vector3(
-          THREE.MathUtils.randFloat(-0.06, 0.06),
-          THREE.MathUtils.randFloat(-0.09, 0.09),
-          THREE.MathUtils.randFloat(-0.06, 0.06),
-        ),
-        bobAmplitude: THREE.MathUtils.randFloat(0.6, 1.8),
-        bobSpeed: THREE.MathUtils.randFloat(0.15, 0.35),
-        bobPhase: Math.random() * Math.PI * 2,
-      });
-    }
+        // Safety net: guarantee this cube sits behind the stage along the
+        // camera's view axis, regardless of the angle/height it landed on.
+        const dot = basePosition.dot(CAMERA_DIR);
+        if (dot > -BG_BEHIND_MARGIN) {
+          basePosition.addScaledVector(CAMERA_DIR, -(dot + BG_BEHIND_MARGIN));
+        }
+
+        mesh.position.copy(basePosition);
+        mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+
+        this.bgGroup.add(mesh);
+        this.bgCubes.push({
+          mesh,
+          basePosition,
+          spin: new THREE.Vector3(
+            THREE.MathUtils.randFloat(-0.06, 0.06),
+            THREE.MathUtils.randFloat(-0.09, 0.09),
+            THREE.MathUtils.randFloat(-0.06, 0.06),
+          ),
+          bobAmplitude: THREE.MathUtils.randFloat(0.6, 1.8),
+          bobSpeed: THREE.MathUtils.randFloat(0.15, 0.35),
+          bobPhase: Math.random() * Math.PI * 2,
+        });
+      }
+    });
   }
 
   private updateBackground(now: number, deltaSeconds: number) {
@@ -375,8 +412,7 @@ export class GameScene {
 
   private setupCamera() {
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
-    const dir = new THREE.Vector3(1, 1.2, 1).normalize();
-    this.camera.position.copy(dir.multiplyScalar(30));
+    this.camera.position.copy(CAMERA_DIR.clone().multiplyScalar(30));
     this.camera.lookAt(0, 0, 0);
   }
 
@@ -388,10 +424,9 @@ export class GameScene {
 
   private frameCameraToLevel() {
     const center = this.gridCenter();
-    const dir = new THREE.Vector3(1, 1.2, 1).normalize();
     const span = Math.max(this.level.width, this.level.height) * CELL_SIZE;
     const distance = span * 1.6 + 10;
-    this.camera.position.copy(center.clone().add(dir.multiplyScalar(distance)));
+    this.camera.position.copy(center.clone().addScaledVector(CAMERA_DIR, distance));
     this.camera.lookAt(center);
 
     const halfSize = span * 0.72 + 2.2;

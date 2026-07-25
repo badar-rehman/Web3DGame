@@ -71,7 +71,18 @@ export class Game {
     if (this.won || this.failed || this.scene.isAnimating()) return;
 
     const { positions, moved } = computeStep(this.cubes, dir, { isBlocked: this.isBlocked });
-    if (!moved) return;
+    // Every cube attempts to move each swipe — one that ends up exactly
+    // where it started was blocked by a wall, obstacle, edge, or another
+    // cube, and gets a little "tried and couldn't" bump instead of nothing.
+    const blockedIds = new Set(
+      this.cubes.filter((c, i) => positions[i].x === c.x && positions[i].y === c.y).map((c) => c.id),
+    );
+
+    if (!moved) {
+      this.input.setEnabled(false);
+      this.scene.animateCubesTo(positions, blockedIds, dir, () => this.input.setEnabled(true));
+      return;
+    }
 
     this.cubes = positions;
     this.moves += 1;
@@ -80,7 +91,7 @@ export class Game {
 
     const fell = positions.some((p) => this.isOutOfBounds(p));
 
-    this.scene.animateCubesTo(positions, () => {
+    this.scene.animateCubesTo(positions, blockedIds, dir, () => {
       if (fell) {
         this.handleFail();
         return;

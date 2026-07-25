@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CellType, CubeState, LevelData } from './types';
+import { CellType, CubeState, Direction, DIRECTION_DELTA, LevelData } from './types';
 import { SymbolShape, buildSymbolPath, cubeVisual } from './cubeVisuals';
 
 export const CELL_SIZE = 1.5;
@@ -14,6 +14,17 @@ const MOVE_OVERSHOOT = 0.55;
 const COYOTE_MS = 230;
 const FALL_DURATION_MS = 620;
 const FALL_DROP = 14;
+const BUMP_DISTANCE = CELL_SIZE * 0.16;
+const BUMP_OUT_MS = 75;
+const BUMP_BACK_MS = 130;
+
+const BG_CUBE_COUNT = 26;
+const BG_RADIUS_MIN = 9;
+const BG_RADIUS_MAX = 24;
+const BG_HEIGHT_MIN = -11;
+const BG_HEIGHT_MAX = 15;
+const BG_DARK_COLORS = [0x1a2038, 0x202a4a, 0x161b30, 0x252f52];
+const BG_ACCENT_COLORS = [0x6ee7f5, 0xf5b26e, 0xf56ea8, 0x8af56e, 0xf5e26e, 0xa56ef5];
 
 const PIPE_RADIUS = 0.07;
 const PIPE_Y = FLOOR_Y + 0.32;
@@ -47,7 +58,7 @@ const COLOR = {
   gridLine: 0xffffff,
 };
 
-type AnimPhase = 'move' | 'slide' | 'hang' | 'drop';
+type AnimPhase = 'move' | 'slide' | 'hang' | 'drop' | 'bump-out' | 'bump-back';
 
 interface CubeAnim {
   phase: AnimPhase;
@@ -61,6 +72,15 @@ interface GlowValues {
   symbol: number;
   edge: number;
   decal: number;
+}
+
+interface BackgroundCube {
+  mesh: THREE.Mesh;
+  basePosition: THREE.Vector3;
+  spin: THREE.Vector3;
+  bobAmplitude: number;
+  bobSpeed: number;
+  bobPhase: number;
 }
 
 interface CubeEntry {
@@ -254,6 +274,9 @@ export class GameScene {
   private animating = false;
   private celebrating = false;
   private celebrationStart = 0;
+  private bgGroup = new THREE.Group();
+  private bgCubes: BackgroundCube[] = [];
+  private lastFrameTime = performance.now();
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -263,11 +286,69 @@ export class GameScene {
     this.scene.background = new THREE.Color(0x0b0e1a);
     this.scene.fog = new THREE.Fog(0x0b0e1a, 25, 55);
     this.scene.add(this.levelGroup);
+    this.scene.add(this.bgGroup);
 
     this.setupLights();
     this.setupCamera();
+    this.buildBackgroundField();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  /**
+   * A slow-drifting swarm of large, dim cubes scattered around the play
+   * area — pure atmosphere. Kept dark and low-opacity (mostly faded further
+   * by fog) with a few faint accent-colored ones mixed in, so it reads as
+   * background depth rather than competing with the actual puzzle.
+   */
+  private buildBackgroundField() {
+    for (let i = 0; i < BG_CUBE_COUNT; i++) {
+      const isAccent = i % 7 === 0;
+      const size = THREE.MathUtils.randFloat(1.6, 5.2);
+      const geo = new THREE.BoxGeometry(size, size, size);
+      const color = isAccent
+        ? BG_ACCENT_COLORS[Math.floor(Math.random() * BG_ACCENT_COLORS.length)]
+        : BG_DARK_COLORS[Math.floor(Math.random() * BG_DARK_COLORS.length)];
+      const material = new THREE.MeshStandardMaterial({
+        color,
+        roughness: 1,
+        metalness: 0,
+        transparent: true,
+        opacity: isAccent ? 0.16 : 0.5,
+      });
+      const mesh = new THREE.Mesh(geo, material);
+
+      const angle = Math.random() * Math.PI * 2;
+      const radius = THREE.MathUtils.randFloat(BG_RADIUS_MIN, BG_RADIUS_MAX);
+      const height = THREE.MathUtils.randFloat(BG_HEIGHT_MIN, BG_HEIGHT_MAX);
+      const basePosition = new THREE.Vector3(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
+      mesh.position.copy(basePosition);
+      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+
+      this.bgGroup.add(mesh);
+      this.bgCubes.push({
+        mesh,
+        basePosition,
+        spin: new THREE.Vector3(
+          THREE.MathUtils.randFloat(-0.06, 0.06),
+          THREE.MathUtils.randFloat(-0.09, 0.09),
+          THREE.MathUtils.randFloat(-0.06, 0.06),
+        ),
+        bobAmplitude: THREE.MathUtils.randFloat(0.6, 1.8),
+        bobSpeed: THREE.MathUtils.randFloat(0.15, 0.35),
+        bobPhase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+
+  private updateBackground(now: number, deltaSeconds: number) {
+    const t = now * 0.001;
+    this.bgCubes.forEach(({ mesh, basePosition, spin, bobAmplitude, bobSpeed, bobPhase }) => {
+      mesh.rotation.x += spin.x * deltaSeconds;
+      mesh.rotation.y += spin.y * deltaSeconds;
+      mesh.rotation.z += spin.z * deltaSeconds;
+      mesh.position.y = basePosition.y + Math.sin(t * bobSpeed + bobPhase) * bobAmplitude;
+    });
   }
 
   private setupLights() {
@@ -320,6 +401,9 @@ export class GameScene {
     this.camera.top = halfSize;
     this.camera.bottom = -halfSize;
     this.camera.updateProjectionMatrix();
+
+    // Keep the background swarm centered around wherever the camera is looking.
+    this.bgGroup.position.set(center.x, 0, center.z);
   }
 
   resize() {
@@ -418,7 +502,9 @@ export class GameScene {
 
   private buildWallsAndObstacles() {
     const wallGeo = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE);
-    const wallMat = new THREE.MeshStandardMaterial({ color: COLOR.wall, roughness: 0.7 });
+    // Reuses the same carved-panel texture as the cube sides, tinted to the
+    // wall color, so maze walls read as being built from the same cube stock.
+    const wallMat = new THREE.MeshStandardMaterial({ map: SIDE_TEXTURES.base, color: COLOR.wall, roughness: 0.7 });
     const obstacleGeo = new THREE.IcosahedronGeometry(CELL_SIZE * 0.34, 0);
     const obstacleMat = new THREE.MeshStandardMaterial({ color: COLOR.obstacle, roughness: 0.8, flatShading: true });
 
@@ -530,16 +616,30 @@ export class GameScene {
    * more satisfying feel. A cube that ends up outside the level bounds (an
    * open edge with no boundary) first slides out over the empty space at
    * normal height and hangs there briefly — coyote time — before gravity
-   * takes over and it drops away. Calls onSettled once every animation
-   * finishes.
+   * takes over and it drops away. A cube listed in `blockedIds` didn't move
+   * at all (a wall, obstacle, edge, or another cube stopped it) — it nudges
+   * a little toward the swiped direction and springs back, so the attempt
+   * still reads as physical feedback rather than nothing happening. Calls
+   * onSettled once every animation finishes.
    */
-  animateCubesTo(positions: CubeState[], onSettled: () => void) {
+  animateCubesTo(positions: CubeState[], blockedIds: Set<string>, direction: Direction, onSettled: () => void) {
     const now = performance.now();
     this.onSettled = onSettled;
     this.animating = true;
+    const delta = DIRECTION_DELTA[direction];
+
     positions.forEach((pos, index) => {
       const entry = this.cubes.get(pos.id);
       if (!entry) return;
+      const start = now + index * MOVE_STAGGER_MS;
+
+      if (blockedIds.has(pos.id)) {
+        const from = entry.group.position.clone();
+        const to = from.clone().add(new THREE.Vector3(delta.x * BUMP_DISTANCE, 0, delta.y * BUMP_DISTANCE));
+        this.cubeAnims.set(pos.id, { phase: 'bump-out', from, to, start, duration: BUMP_OUT_MS });
+        return;
+      }
+
       const falling = this.isOutOfBounds(pos);
       const { wx, wz } = this.toWorld(pos.x, pos.y);
       const to = new THREE.Vector3(wx, FLOOR_Y + CUBE_SIZE / 2, wz);
@@ -547,7 +647,7 @@ export class GameScene {
         phase: falling ? 'slide' : 'move',
         from: entry.group.position.clone(),
         to,
-        start: now + index * MOVE_STAGGER_MS,
+        start,
         duration: MOVE_DURATION_MS,
       });
     });
@@ -598,6 +698,8 @@ export class GameScene {
       if (t >= 1) {
         if (anim.phase === 'slide') {
           this.cubeAnims.set(id, { phase: 'hang', from: anim.to, to: anim.to, start: now, duration: COYOTE_MS });
+        } else if (anim.phase === 'bump-out') {
+          this.cubeAnims.set(id, { phase: 'bump-back', from: anim.to, to: anim.from, start: now, duration: BUMP_BACK_MS });
         } else {
           this.cubeAnims.delete(id);
         }
@@ -681,8 +783,11 @@ export class GameScene {
 
   render() {
     const now = performance.now();
+    const deltaSeconds = Math.min(0.1, (now - this.lastFrameTime) / 1000);
+    this.lastFrameTime = now;
     this.updateAnims(now);
     this.updateGlow(now);
+    this.updateBackground(now, deltaSeconds);
     this.renderer.render(this.scene, this.camera);
   }
 }

@@ -41,10 +41,16 @@ export interface LevelData {
   name: string;
   width: number;
   height: number;
-  /** Row-major grid: cells[row][col]. */
+  /** Row-major grid: cells[row][col]. Interior maze walls only — the outer edge is not part of this grid. */
   cells: CellType[][];
   /** Starting positions of movable, identified cubes. */
   cubes: CubeState[];
   /** The relative formation that must be assembled to win. */
   goal: RelationEdge[];
+  /**
+   * Whether the level's outer edge is enclosed. When true, a boundary pipe
+   * traces the perimeter and cubes can't be pushed past it. When false,
+   * there's no rail — a cube pushed past the edge falls and the level fails.
+   */
+  hasBoundary: boolean;
 }

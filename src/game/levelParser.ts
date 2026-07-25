@@ -8,7 +8,13 @@ const CHAR_TO_CELL: Record<string, CellType> = {
   O: CellType.Obstacle,
 };
 
-export function parseLevel(id: number, name: string, rows: string[], goal: RelationEdge[]): LevelData {
+export function parseLevel(
+  id: number,
+  name: string,
+  rows: string[],
+  goal: RelationEdge[],
+  hasBoundary: boolean,
+): LevelData {
   const height = rows.length;
   const width = Math.max(...rows.map((r) => r.length));
   const cells: CellType[][] = [];
@@ -28,5 +34,5 @@ export function parseLevel(id: number, name: string, rows: string[], goal: Relat
     cells.push(cellRow);
   });
 
-  return { id, name, width, height, cells, cubes, goal };
+  return { id, name, width, height, cells, cubes, goal, hasBoundary };
 }

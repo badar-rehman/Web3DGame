@@ -145,7 +145,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
   color: rgba(11, 14, 26, 0.85);
   background: var(--cube-color, rgba(255, 255, 255, 0.2));
@@ -217,6 +217,7 @@ button {
 }
 
 #win-overlay,
+#fail-overlay,
 #level-select-overlay {
   position: absolute;
   inset: 0;
@@ -229,6 +230,7 @@ button {
 }
 
 #win-card,
+#fail-card,
 #level-select-card {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
@@ -242,6 +244,26 @@ button {
 #win-card h2 {
   margin: 0 0 8px;
   color: var(--accent);
+}
+
+#fail-card h2 {
+  margin: 0 0 8px;
+  color: #f5716e;
+}
+
+#fail-reason {
+  color: var(--text-dim);
+  margin: 0 0 20px;
+}
+
+#retry-level-btn {
+  background: linear-gradient(135deg, #f5716e, #c9504e);
+  border: none;
+  color: #2a0b0a;
+  font-weight: 700;
+  padding: 10px 18px;
+  border-radius: 10px;
+  font-size: 14px;
 }
 
 #win-moves {

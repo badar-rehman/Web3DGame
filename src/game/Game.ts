@@ -6,6 +6,8 @@ import { evaluateFormation } from './formation';
 import { LEVELS, getLevel } from './levels';
 import { CellType, CubeState, Direction, LevelData } from './types';
 
+const WIN_CELEBRATION_MS = 950;
+
 export class Game {
   private scene: GameScene;
   private input: InputController;
@@ -14,6 +16,7 @@ export class Game {
   private cubes: CubeState[] = [];
   private moves = 0;
   private won = false;
+  private failed = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene = new GameScene(canvas);
@@ -37,10 +40,14 @@ export class Game {
   }
 
   private isBlocked = (x: number, y: number): boolean => {
-    if (x < 0 || y < 0 || x >= this.level.width || y >= this.level.height) return true;
+    if (x < 0 || y < 0 || x >= this.level.width || y >= this.level.height) return this.level.hasBoundary;
     const cell = this.level.cells[y][x];
     return cell === CellType.Wall || cell === CellType.Obstacle;
   };
+
+  private isOutOfBounds(pos: CubeState): boolean {
+    return pos.x < 0 || pos.y < 0 || pos.x >= this.level.width || pos.y >= this.level.height;
+  }
 
   private goToLevel(id: number) {
     const level = getLevel(id) ?? LEVELS[0];
@@ -48,6 +55,7 @@ export class Game {
     this.cubes = level.cubes.map((c) => ({ ...c }));
     this.moves = 0;
     this.won = false;
+    this.failed = false;
 
     this.scene.loadLevel(level, this.cubes);
     this.ui.showLevel(level);
@@ -62,7 +70,7 @@ export class Game {
   }
 
   private handleDirection(dir: Direction) {
-    if (this.won || this.scene.isAnimating()) return;
+    if (this.won || this.failed || this.scene.isAnimating()) return;
 
     const { positions, moved } = computeStep(this.cubes, dir, { isBlocked: this.isBlocked });
     if (!moved) return;
@@ -72,7 +80,13 @@ export class Game {
     this.ui.setMoves(this.moves);
     this.input.setEnabled(false);
 
+    const fell = positions.some((p) => this.isOutOfBounds(p));
+
     this.scene.animateCubesTo(positions, () => {
+      if (fell) {
+        this.handleFail();
+        return;
+      }
       this.input.setEnabled(true);
       const solved = this.refreshFormationStatus();
       if (solved) this.handleWin();
@@ -86,11 +100,18 @@ export class Game {
     return status.solved;
   }
 
+  private handleFail() {
+    this.failed = true;
+    this.ui.showFail();
+  }
+
   private handleWin() {
     this.won = true;
-    this.ui.markCompleted(this.level.id, LEVELS.length);
-    this.ui.setNextLevelAvailable(this.level.id < LEVELS.length);
-    this.ui.showWin(this.moves);
+    this.scene.playWinCelebration(WIN_CELEBRATION_MS, () => {
+      this.ui.markCompleted(this.level.id, LEVELS.length);
+      this.ui.setNextLevelAvailable(this.level.id < LEVELS.length);
+      this.ui.showWin(this.moves);
+    });
   }
 
   private loop = () => {

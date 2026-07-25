@@ -46,6 +46,8 @@ export class UIManager {
   private winMoves = document.getElementById('win-moves')!;
   private nextLevelBtn = document.getElementById('next-level-btn')!;
   private replayLevelBtn = document.getElementById('replay-level-btn')!;
+  private failOverlay = document.getElementById('fail-overlay')!;
+  private retryLevelBtn = document.getElementById('retry-level-btn')!;
   private levelSelectOverlay = document.getElementById('level-select-overlay')!;
   private levelSelectGrid = document.getElementById('level-select-grid')!;
   private closeLevelSelectBtn = document.getElementById('close-level-select-btn')!;
@@ -60,6 +62,7 @@ export class UIManager {
     this.restartBtn.addEventListener('click', () => this.callbacks.onRestart());
     this.nextLevelBtn.addEventListener('click', () => this.callbacks.onNextLevel());
     this.replayLevelBtn.addEventListener('click', () => this.callbacks.onReplay());
+    this.retryLevelBtn.addEventListener('click', () => this.callbacks.onRestart());
     this.levelsBtn.addEventListener('click', () => this.callbacks.onOpenLevelSelect());
     this.closeLevelSelectBtn.addEventListener('click', () => this.levelSelectOverlay.classList.add('hidden'));
 
@@ -79,6 +82,7 @@ export class UIManager {
   showLevel(level: LevelData) {
     this.levelLabel.textContent = `Level ${level.id} — ${level.name}`;
     this.hideWin();
+    this.hideFail();
     this.buildGoalDiagram(level);
     this.buildRelationChecklist(level);
   }
@@ -114,7 +118,7 @@ export class UIManager {
           const visual = cubeVisual(id);
           div.classList.add('cube');
           div.style.setProperty('--cube-color', visual.cssColor);
-          div.textContent = visual.label;
+          div.textContent = visual.glyph;
           this.goalCubeCells.set(id, div);
         }
         this.goalGrid.appendChild(div);
@@ -158,6 +162,14 @@ export class UIManager {
 
   hideWin() {
     this.winOverlay.classList.add('hidden');
+  }
+
+  showFail() {
+    this.failOverlay.classList.remove('hidden');
+  }
+
+  hideFail() {
+    this.failOverlay.classList.add('hidden');
   }
 
   setNextLevelAvailable(available: boolean) {

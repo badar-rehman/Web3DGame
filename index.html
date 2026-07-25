@@ -14,6 +14,7 @@
         <div id="hud-top">
           <div id="level-label">Level 1</div>
           <div id="move-counter">Moves: 0</div>
+          <button id="hint-btn" title="Show a hint">💡 Hint</button>
           <button id="restart-btn" title="Restart level">⟲ Restart</button>
         </div>
 
@@ -58,6 +59,9 @@
       </div>
 
       <div id="swipe-hint">Swipe or use arrow keys to slide the cubes</div>
+
+      <div id="hint-arrow" class="hidden"><div id="hint-arrow-shape"></div></div>
+      <div id="hint-toast" class="hidden">No hint available — try Restart</div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

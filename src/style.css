@@ -104,7 +104,8 @@ button:not(:disabled):active {
 }
 
 #restart-btn,
-#levels-btn {
+#levels-btn,
+#hint-btn {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(8px);
@@ -115,8 +116,13 @@ button:not(:disabled):active {
 }
 
 #restart-btn:hover,
-#levels-btn:hover {
+#levels-btn:hover,
+#hint-btn:not(:disabled):hover {
   background: rgba(110, 231, 245, 0.18);
+}
+
+#hint-btn:disabled {
+  opacity: 0.55;
 }
 
 #levels-btn {
@@ -228,6 +234,75 @@ button:not(:disabled):active {
 }
 
 #swipe-hint.hidden {
+  display: block !important;
+  opacity: 0;
+}
+
+#hint-arrow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 5;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+#hint-arrow.hidden {
+  display: block !important;
+  opacity: 0;
+}
+
+#hint-arrow.dir-down {
+  transform: translate(-50%, -50%) rotate(180deg);
+}
+
+#hint-arrow.dir-left {
+  transform: translate(-50%, -50%) rotate(-90deg);
+}
+
+#hint-arrow.dir-right {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+#hint-arrow-shape {
+  width: 0;
+  height: 0;
+  border-left: 28px solid transparent;
+  border-right: 28px solid transparent;
+  border-bottom: 46px solid var(--accent);
+  filter: drop-shadow(0 0 16px var(--accent));
+  animation: hint-bounce 0.85s ease-in-out infinite;
+}
+
+@keyframes hint-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+#hint-toast {
+  position: absolute;
+  bottom: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--text);
+  font-size: 13px;
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  backdrop-filter: blur(8px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+#hint-toast.hidden {
   display: block !important;
   opacity: 0;
 }

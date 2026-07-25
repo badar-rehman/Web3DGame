@@ -3,6 +3,7 @@ import { InputController } from './InputController';
 import { UIManager } from './UIManager';
 import { computeStep } from './MovementSolver';
 import { evaluateFormation } from './formation';
+import { HintManager } from './HintManager';
 import { LEVELS, getLevel } from './levels';
 import { CellType, CubeState, Direction, LevelData } from './types';
 
@@ -10,11 +11,13 @@ export class Game {
   private scene: GameScene;
   private input: InputController;
   private ui: UIManager;
+  private hints = new HintManager();
   private level!: LevelData;
   private cubes: CubeState[] = [];
   private moves = 0;
   private won = false;
   private failed = false;
+  private hintPending = false;
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene = new GameScene(canvas);
@@ -27,6 +30,7 @@ export class Game {
         this.ui.renderLevelSelect(LEVELS, this.level.id);
         this.ui.openLevelSelect();
       },
+      onHint: () => this.requestHint(),
     });
     this.input = new InputController(canvas, (dir) => this.handleDirection(dir));
 
@@ -54,6 +58,7 @@ export class Game {
     this.moves = 0;
     this.won = false;
     this.failed = false;
+    this.hintPending = false;
 
     this.scene.loadLevel(level, this.cubes);
     this.ui.showLevel(level);
@@ -99,6 +104,30 @@ export class Game {
       this.input.setEnabled(true);
       const solved = this.refreshFormationStatus();
       if (solved) this.handleWin();
+    });
+  }
+
+  private requestHint() {
+    if (this.won || this.failed || this.hintPending || !this.hints.canUseHint()) return;
+    this.hintPending = true;
+    this.ui.setHintLoading(true);
+
+    const requestedLevelId = this.level.id;
+    const cubesSnapshot = this.cubes.map((c) => ({ ...c }));
+    this.hints.requestHint(cubesSnapshot, this.level).then((direction) => {
+      this.hintPending = false;
+      // The player may have restarted, switched levels, or already won by
+      // the time this resolves — a stale hint would be actively misleading.
+      if (this.level.id !== requestedLevelId || this.won || this.failed) {
+        this.ui.setHintLoading(false);
+        return;
+      }
+      this.ui.setHintLoading(false);
+      if (direction) {
+        this.ui.showHintDirection(direction);
+      } else {
+        this.ui.showHintUnavailable();
+      }
     });
   }
 

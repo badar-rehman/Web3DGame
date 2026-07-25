@@ -1,6 +1,9 @@
-import { LevelData } from './types';
+import { Direction, LevelData } from './types';
 import { cubeVisual } from './cubeVisuals';
 import { computeRelativeLayout, relationText, FormationStatus } from './formation';
+
+const HINT_ARROW_MS = 1600;
+const HINT_TOAST_MS = 2200;
 
 const PROGRESS_KEY = 'cube-shift-progress';
 
@@ -33,6 +36,7 @@ export interface UICallbacks {
   onReplay: () => void;
   onSelectLevel: (id: number) => void;
   onOpenLevelSelect: () => void;
+  onHint: () => void;
 }
 
 export class UIManager {
@@ -52,10 +56,15 @@ export class UIManager {
   private levelSelectGrid = document.getElementById('level-select-grid')!;
   private closeLevelSelectBtn = document.getElementById('close-level-select-btn')!;
   private swipeHint = document.getElementById('swipe-hint')!;
+  private hintBtn = document.getElementById('hint-btn')! as HTMLButtonElement;
+  private hintArrow = document.getElementById('hint-arrow')!;
+  private hintToast = document.getElementById('hint-toast')!;
 
   private goalCubeCells = new Map<string, HTMLDivElement>();
   private relationItems: HTMLDivElement[] = [];
   private progress: Progress;
+  private hintArrowTimeout: number | undefined;
+  private hintToastTimeout: number | undefined;
 
   constructor(private callbacks: UICallbacks) {
     this.progress = loadProgress();
@@ -65,6 +74,7 @@ export class UIManager {
     this.retryLevelBtn.addEventListener('click', () => this.callbacks.onRestart());
     this.levelsBtn.addEventListener('click', () => this.callbacks.onOpenLevelSelect());
     this.closeLevelSelectBtn.addEventListener('click', () => this.levelSelectOverlay.classList.add('hidden'));
+    this.hintBtn.addEventListener('click', () => this.callbacks.onHint());
 
     window.setTimeout(() => this.swipeHint.classList.add('hidden'), 4000);
   }
@@ -85,6 +95,11 @@ export class UIManager {
     this.hideFail();
     this.buildGoalDiagram(level);
     this.buildRelationChecklist(level);
+    window.clearTimeout(this.hintArrowTimeout);
+    window.clearTimeout(this.hintToastTimeout);
+    this.hintArrow.classList.add('hidden');
+    this.hintToast.classList.add('hidden');
+    this.setHintLoading(false);
   }
 
   private buildGoalDiagram(level: LevelData) {
@@ -174,6 +189,24 @@ export class UIManager {
 
   setNextLevelAvailable(available: boolean) {
     this.nextLevelBtn.style.display = available ? '' : 'none';
+  }
+
+  setHintLoading(loading: boolean) {
+    this.hintBtn.disabled = loading;
+    this.hintBtn.textContent = loading ? '💡 …' : '💡 Hint';
+  }
+
+  showHintDirection(direction: Direction) {
+    window.clearTimeout(this.hintArrowTimeout);
+    this.hintArrow.classList.remove('dir-up', 'dir-down', 'dir-left', 'dir-right', 'hidden');
+    this.hintArrow.classList.add(`dir-${direction}`);
+    this.hintArrowTimeout = window.setTimeout(() => this.hintArrow.classList.add('hidden'), HINT_ARROW_MS);
+  }
+
+  showHintUnavailable() {
+    window.clearTimeout(this.hintToastTimeout);
+    this.hintToast.classList.remove('hidden');
+    this.hintToastTimeout = window.setTimeout(() => this.hintToast.classList.add('hidden'), HINT_TOAST_MS);
   }
 
   renderLevelSelect(levels: LevelData[], currentId: number) {

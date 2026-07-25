@@ -1,10 +1,27 @@
-import { CubeState, RelationEdge, Vec2 } from './types';
+import { CubeState, Direction, DIRECTION_DELTA, RelationEdge, Vec2 } from './types';
 import { cubeVisual } from './cubeVisuals';
 
 export interface FormationStatus {
   solved: boolean;
   satisfiedEdges: Set<number>;
+  /** Every cube that has at least one satisfied bond (whole-cube "connected" indicator). */
   glowingCubeIds: Set<string>;
+  /** Per cube, which cardinal faces currently touch a correctly-bonded neighbor. */
+  directionalGlow: Map<string, Set<Direction>>;
+}
+
+function directionFromDelta(dx: number, dy: number): Direction | null {
+  for (const dir of Object.keys(DIRECTION_DELTA) as Direction[]) {
+    const delta = DIRECTION_DELTA[dir];
+    if (delta.x === dx && delta.y === dy) return dir;
+  }
+  return null;
+}
+
+function addDirection(map: Map<string, Set<Direction>>, id: string, dir: Direction | null) {
+  if (!dir) return;
+  if (!map.has(id)) map.set(id, new Set());
+  map.get(id)!.add(dir);
 }
 
 /**
@@ -16,6 +33,7 @@ export function evaluateFormation(cubes: CubeState[], goal: RelationEdge[]): For
   const byId = new Map(cubes.map((c) => [c.id, c]));
   const satisfiedEdges = new Set<number>();
   const glowingCubeIds = new Set<string>();
+  const directionalGlow = new Map<string, Set<Direction>>();
 
   goal.forEach((edge, i) => {
     const from = byId.get(edge.from);
@@ -25,6 +43,11 @@ export function evaluateFormation(cubes: CubeState[], goal: RelationEdge[]): For
       satisfiedEdges.add(i);
       glowingCubeIds.add(edge.from);
       glowingCubeIds.add(edge.to);
+
+      // `from` sits (dx, dy) away from `to` — that's the face of `to` that
+      // touches `from`, and the opposite face of `from` that touches `to`.
+      addDirection(directionalGlow, edge.to, directionFromDelta(edge.dx, edge.dy));
+      addDirection(directionalGlow, edge.from, directionFromDelta(-edge.dx, -edge.dy));
     }
   });
 
@@ -32,6 +55,7 @@ export function evaluateFormation(cubes: CubeState[], goal: RelationEdge[]): For
     solved: goal.length > 0 && satisfiedEdges.size === goal.length,
     satisfiedEdges,
     glowingCubeIds,
+    directionalGlow,
   };
 }
 

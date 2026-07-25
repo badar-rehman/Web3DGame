@@ -106,6 +106,7 @@ export class Game {
     const status = evaluateFormation(this.cubes, this.level.goal);
     this.ui.updateFormationStatus(status);
     this.scene.setGlowingCubes(status.glowingCubeIds);
+    this.scene.setBondDirections(status.directionalGlow);
     return status.solved;
   }
 

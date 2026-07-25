@@ -74,6 +74,18 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+/** Advances a single scalar spring tween toward `target`, retargeting mid-flight without jumps. */
+function stepScalarTween(tween: ScalarTween, target: number, now: number, durationMs: number): number {
+  if (target !== tween.to) {
+    const t0 = easeOutBack(Math.min(1, (now - tween.start) / durationMs));
+    tween.from = lerp(tween.from, tween.to, t0);
+    tween.to = target;
+    tween.start = now;
+  }
+  const t = easeOutBack(Math.min(1, (now - tween.start) / durationMs));
+  return Math.max(0, lerp(tween.from, tween.to, t));
+}
+
 const COLOR = {
   floor: 0x1c2038,
   wall: 0x4b5580,
@@ -97,6 +109,14 @@ interface GlowValues {
   decal: number;
 }
 
+interface ScalarTween {
+  from: number;
+  to: number;
+  start: number;
+}
+
+const SIDE_DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
+
 interface BackgroundCube {
   mesh: THREE.Mesh;
   basePosition: THREE.Vector3;
@@ -108,7 +128,10 @@ interface BackgroundCube {
 
 interface CubeEntry {
   group: THREE.Group;
-  faceMaterials: THREE.MeshStandardMaterial[];
+  topMaterial: THREE.MeshStandardMaterial;
+  /** One independent material per cardinal side, so only the face touching a satisfied bond's partner glows. */
+  sideMaterials: Record<Direction, THREE.MeshStandardMaterial>;
+  sideGlow: Record<Direction, ScalarTween>;
   edgeMaterial: THREE.MeshBasicMaterial;
   glowDecal: THREE.Mesh;
   glowDecalMaterial: THREE.MeshBasicMaterial;
@@ -291,6 +314,7 @@ export class GameScene {
   private cubes = new Map<string, CubeEntry>();
   private cubeAnims = new Map<string, CubeAnim>();
   private glowingIds = new Set<string>();
+  private directionalGlow = new Map<string, Set<Direction>>();
   private level!: LevelData;
   private levelGroup = new THREE.Group();
   private onSettled: (() => void) | null = null;
@@ -574,18 +598,29 @@ export class GameScene {
       const baseColor = new THREE.Color(visual.color);
       const group = new THREE.Group();
 
+      const makeSideMat = () =>
+        new THREE.MeshStandardMaterial({
+          map: SIDE_TEXTURES.base,
+          emissiveMap: SIDE_TEXTURES.emissive,
+          emissive: baseColor,
+          emissiveIntensity: 0,
+          color: baseColor,
+          roughness: 0.55,
+          metalness: 0.08,
+        });
+      // A separate material per cardinal side, so a satisfied bond only
+      // lights up the specific face that touches its partner — not the
+      // whole cube.
+      const sideMaterials: Record<Direction, THREE.MeshStandardMaterial> = {
+        right: makeSideMat(),
+        left: makeSideMat(),
+        down: makeSideMat(),
+        up: makeSideMat(),
+      };
+
       const topTex = getTopTextures(visual.symbol);
       // Base color map tints the near-white carved texture to this cube's
       // hue; emissiveMap masks the glow to just the carved lines/outline.
-      const sideMat = new THREE.MeshStandardMaterial({
-        map: SIDE_TEXTURES.base,
-        emissiveMap: SIDE_TEXTURES.emissive,
-        emissive: baseColor,
-        emissiveIntensity: 0,
-        color: baseColor,
-        roughness: 0.55,
-        metalness: 0.08,
-      });
       const topMat = new THREE.MeshStandardMaterial({
         map: topTex.base,
         emissiveMap: topTex.emissive,
@@ -595,8 +630,17 @@ export class GameScene {
         roughness: 0.5,
         metalness: 0.08,
       });
-      // BoxGeometry face group order: +x, -x, +y (top), -y (bottom), +z, -z
-      const body = new THREE.Mesh(bodyGeo, [sideMat, sideMat, topMat, sideMat, sideMat, sideMat]);
+      // BoxGeometry face group order: +x, -x, +y (top), -y (bottom), +z, -z.
+      // Grid "right"(+x)/"left"(-x)/"down"(+z, dy=+1)/"up"(-z, dy=-1); the
+      // bottom face reuses "left" since it's never actually visible.
+      const body = new THREE.Mesh(bodyGeo, [
+        sideMaterials.right,
+        sideMaterials.left,
+        topMat,
+        sideMaterials.left,
+        sideMaterials.down,
+        sideMaterials.up,
+      ]);
       body.castShadow = true;
       body.receiveShadow = true;
       group.add(body);
@@ -622,9 +666,14 @@ export class GameScene {
       this.levelGroup.add(glowDecal);
 
       const baseline: GlowValues = { symbol: 0, edge: EDGE_BASE_BRIGHTNESS, decal: 0 };
+      const sideGlow = Object.fromEntries(
+        SIDE_DIRECTIONS.map((dir) => [dir, { from: 0, to: 0, start: 0 } satisfies ScalarTween]),
+      ) as Record<Direction, ScalarTween>;
       this.cubes.set(cube.id, {
         group,
-        faceMaterials: [topMat, sideMat],
+        topMaterial: topMat,
+        sideMaterials,
+        sideGlow,
         edgeMaterial: edgeMat,
         glowDecal,
         glowDecalMaterial,
@@ -691,6 +740,11 @@ export class GameScene {
   /** Cubes currently satisfying a formation bond get a steady (non-pulsing) symbol glow. */
   setGlowingCubes(ids: Set<string>) {
     this.glowingIds = ids;
+  }
+
+  /** Per cube, which cardinal faces currently touch a correctly-bonded neighbor. */
+  setBondDirections(directions: Map<string, Set<Direction>>) {
+    this.directionalGlow = directions;
   }
 
   /** Pulses every cube's edges and symbol brightly a few times, then calls onDone. */
@@ -761,8 +815,10 @@ export class GameScene {
       const decalOpacity = DECAL_CELEBRATE_PEAK * envelope;
 
       this.cubes.forEach((entry) => {
-        entry.faceMaterials.forEach((mat) => {
-          mat.emissiveIntensity = symbolIntensity;
+        entry.topMaterial.emissiveIntensity = symbolIntensity;
+        SIDE_DIRECTIONS.forEach((dir) => {
+          entry.sideMaterials[dir].emissiveIntensity = symbolIntensity;
+          entry.sideGlow[dir] = { from: symbolIntensity, to: symbolIntensity, start: now };
         });
         entry.edgeMaterial.color.copy(entry.baseColor).multiplyScalar(edgeBrightness);
         entry.glowDecalMaterial.opacity = decalOpacity;
@@ -802,13 +858,20 @@ export class GameScene {
       const edgeBrightness = Math.max(0, lerp(entry.glowFrom.edge, entry.glowTo.edge, t));
       const decalOpacity = Math.min(1, Math.max(0, lerp(entry.glowFrom.decal, entry.glowTo.decal, t)));
 
-      entry.faceMaterials.forEach((mat) => {
-        mat.emissiveIntensity = symbolIntensity;
-      });
+      entry.topMaterial.emissiveIntensity = symbolIntensity;
       entry.edgeMaterial.color.copy(entry.baseColor).multiplyScalar(edgeBrightness);
       entry.glowDecalMaterial.opacity = decalOpacity;
       entry.glowDecal.position.x = entry.group.position.x;
       entry.glowDecal.position.z = entry.group.position.z;
+
+      // Each side face glows independently, only when its own specific
+      // bond direction is currently satisfied.
+      const satisfiedDirs = this.directionalGlow.get(id);
+      SIDE_DIRECTIONS.forEach((dir) => {
+        const dirTarget = satisfiedDirs?.has(dir) ? SYMBOL_CONNECTED_INTENSITY : 0;
+        const intensity = stepScalarTween(entry.sideGlow[dir], dirTarget, now, GLOW_TRANSITION_MS);
+        entry.sideMaterials[dir].emissiveIntensity = intensity;
+      });
     });
   }
 

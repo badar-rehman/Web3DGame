@@ -4,10 +4,12 @@ import { cubeVisual, drawSymbol } from './cubeVisuals';
 
 export const CELL_SIZE = 1.5;
 const FLOOR_Y = 0.1;
+const FLOOR_TILE_HEIGHT = 0.3;
 const WALL_HEIGHT = 1.1;
 const OBSTACLE_HEIGHT = 0.65;
 const CUBE_SIZE = 0.92;
 const MOVE_DURATION_MS = 160;
+const COYOTE_MS = 230;
 const FALL_DURATION_MS = 620;
 const FALL_DROP = 14;
 
@@ -28,12 +30,14 @@ const COLOR = {
   gridLine: 0xffffff,
 };
 
+type AnimPhase = 'move' | 'slide' | 'hang' | 'drop';
+
 interface CubeAnim {
+  phase: AnimPhase;
   from: THREE.Vector3;
   to: THREE.Vector3;
   start: number;
   duration: number;
-  falling: boolean;
 }
 
 interface CubeEntry {
@@ -225,14 +229,21 @@ export class GameScene {
   }
 
   private buildFloor() {
-    const center = this.gridCenter();
-    const floorGeo = new THREE.PlaneGeometry(this.level.width * CELL_SIZE, this.level.height * CELL_SIZE);
-    const floorMat = new THREE.MeshStandardMaterial({ color: COLOR.floor, roughness: 0.95 });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(center.x, FLOOR_Y, center.z);
-    floor.receiveShadow = true;
-    this.levelGroup.add(floor);
+    // The floor is a real grid of 3D tile blocks, not a flat plane — so an
+    // open edge is an actual physical drop-off (nothing to visually clip
+    // through) rather than a cube sliding past a paper-thin sheet.
+    const tileGeo = new THREE.BoxGeometry(CELL_SIZE, FLOOR_TILE_HEIGHT, CELL_SIZE);
+    const tileMat = new THREE.MeshStandardMaterial({ color: COLOR.floor, roughness: 0.95 });
+    for (let y = 0; y < this.level.height; y++) {
+      for (let x = 0; x < this.level.width; x++) {
+        const { wx, wz } = this.toWorld(x, y);
+        const tile = new THREE.Mesh(tileGeo, tileMat);
+        tile.position.set(wx, FLOOR_Y - FLOOR_TILE_HEIGHT / 2, wz);
+        tile.receiveShadow = true;
+        tile.castShadow = true;
+        this.levelGroup.add(tile);
+      }
+    }
     this.levelGroup.add(this.buildGridLines());
   }
 
@@ -366,9 +377,11 @@ export class GameScene {
   }
 
   /**
-   * Animate cubes to new grid positions. Cubes that end up outside the level
-   * bounds (an open edge with no boundary) fall away instead of sliding.
-   * Calls onSettled once every animation finishes.
+   * Animate cubes to new grid positions. A cube that ends up outside the
+   * level bounds (an open edge with no boundary) first slides out over the
+   * empty space at normal height and hangs there briefly — coyote time —
+   * before gravity takes over and it drops away. Calls onSettled once every
+   * animation finishes.
    */
   animateCubesTo(positions: CubeState[], onSettled: () => void) {
     const now = performance.now();
@@ -379,15 +392,13 @@ export class GameScene {
       if (!entry) return;
       const falling = this.isOutOfBounds(pos);
       const { wx, wz } = this.toWorld(pos.x, pos.y);
-      const to = falling
-        ? new THREE.Vector3(wx, FLOOR_Y + CUBE_SIZE / 2 - FALL_DROP, wz)
-        : new THREE.Vector3(wx, FLOOR_Y + CUBE_SIZE / 2, wz);
+      const to = new THREE.Vector3(wx, FLOOR_Y + CUBE_SIZE / 2, wz);
       this.cubeAnims.set(pos.id, {
+        phase: falling ? 'slide' : 'move',
         from: entry.group.position.clone(),
         to,
         start: now,
-        duration: falling ? FALL_DURATION_MS : MOVE_DURATION_MS,
-        falling,
+        duration: MOVE_DURATION_MS,
       });
     });
   }
@@ -408,21 +419,41 @@ export class GameScene {
 
   private updateAnims(now: number) {
     if (this.cubeAnims.size === 0) return;
-    let allDone = true;
-    for (const [id, anim] of this.cubeAnims) {
+
+    for (const [id, anim] of [...this.cubeAnims]) {
       const entry = this.cubes.get(id);
-      if (!entry) continue;
-      const t = Math.min(1, (now - anim.start) / anim.duration);
-      const eased = anim.falling ? t * t : 1 - Math.pow(1 - t, 3);
-      entry.group.position.lerpVectors(anim.from, anim.to, eased);
-      if (anim.falling) {
-        entry.group.rotation.x += 0.12;
-        entry.group.rotation.z += 0.08;
+      if (!entry) {
+        this.cubeAnims.delete(id);
+        continue;
       }
-      if (t < 1) allDone = false;
+
+      if (anim.phase === 'hang') {
+        if (now - anim.start >= anim.duration) {
+          const from = entry.group.position.clone();
+          const to = from.clone().setY(from.y - FALL_DROP);
+          this.cubeAnims.set(id, { phase: 'drop', from, to, start: now, duration: FALL_DURATION_MS });
+        }
+        continue;
+      }
+
+      const t = Math.min(1, (now - anim.start) / anim.duration);
+      const eased = anim.phase === 'drop' ? t * t : 1 - Math.pow(1 - t, 3);
+      entry.group.position.lerpVectors(anim.from, anim.to, eased);
+      if (anim.phase === 'drop') {
+        entry.group.rotation.x += 0.14;
+        entry.group.rotation.z += 0.09;
+      }
+
+      if (t >= 1) {
+        if (anim.phase === 'slide') {
+          this.cubeAnims.set(id, { phase: 'hang', from: anim.to, to: anim.to, start: now, duration: COYOTE_MS });
+        } else {
+          this.cubeAnims.delete(id);
+        }
+      }
     }
-    if (allDone) {
-      this.cubeAnims.clear();
+
+    if (this.cubeAnims.size === 0) {
       this.animating = false;
       const cb = this.onSettled;
       this.onSettled = null;

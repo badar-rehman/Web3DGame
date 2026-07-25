@@ -1,4 +1,5 @@
 import { CubeState, RelationEdge, Vec2 } from './types';
+import { cubeVisual } from './cubeVisuals';
 
 export interface FormationStatus {
   solved: boolean;
@@ -34,13 +35,15 @@ export function evaluateFormation(cubes: CubeState[], goal: RelationEdge[]): For
   };
 }
 
-/** Human-readable description of a bond, for the HUD checklist. */
+/** Human-readable description of a bond, for the HUD checklist. Uses each cube's symbol, never its internal letter id. */
 export function relationText(edge: RelationEdge): string {
-  if (edge.dx === 0 && edge.dy === -1) return `${edge.from} above ${edge.to}`;
-  if (edge.dx === 0 && edge.dy === 1) return `${edge.from} below ${edge.to}`;
-  if (edge.dx === -1 && edge.dy === 0) return `${edge.from} left of ${edge.to}`;
-  if (edge.dx === 1 && edge.dy === 0) return `${edge.from} right of ${edge.to}`;
-  return `${edge.from} at (${edge.dx}, ${edge.dy}) from ${edge.to}`;
+  const from = cubeVisual(edge.from).glyph;
+  const to = cubeVisual(edge.to).glyph;
+  if (edge.dx === 0 && edge.dy === -1) return `${from} above ${to}`;
+  if (edge.dx === 0 && edge.dy === 1) return `${from} below ${to}`;
+  if (edge.dx === -1 && edge.dy === 0) return `${from} left of ${to}`;
+  if (edge.dx === 1 && edge.dy === 0) return `${from} right of ${to}`;
+  return `${from} at (${edge.dx}, ${edge.dy}) from ${to}`;
 }
 
 /**

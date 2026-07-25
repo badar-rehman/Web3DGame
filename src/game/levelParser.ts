@@ -1,32 +1,32 @@
-import { CellType, LevelData, Vec2 } from './types';
+import { CellType, LevelData, RelationEdge } from './types';
+import { CUBE_PALETTE } from './cubeVisuals';
 
-// '.' floor · '#' wall · 'O' obstacle · 'C' cube start · 'T' target · 'X' cube start on a target
+// '.' floor · '#' wall · 'O' obstacle · any letter in CUBE_PALETTE (A, B, C, ...) is a cube start
 const CHAR_TO_CELL: Record<string, CellType> = {
   '.': CellType.Floor,
   '#': CellType.Wall,
   O: CellType.Obstacle,
-  C: CellType.Floor,
-  T: CellType.Floor,
-  X: CellType.Floor,
 };
 
-export function parseLevel(id: number, name: string, rows: string[]): LevelData {
+export function parseLevel(id: number, name: string, rows: string[], goal: RelationEdge[]): LevelData {
   const height = rows.length;
   const width = Math.max(...rows.map((r) => r.length));
   const cells: CellType[][] = [];
-  const cubes: Vec2[] = [];
-  const targets: Vec2[] = [];
+  const cubes: LevelData['cubes'] = [];
 
   rows.forEach((row, y) => {
     const cellRow: CellType[] = [];
     for (let x = 0; x < width; x++) {
       const ch = row[x] ?? '.';
-      cellRow.push(CHAR_TO_CELL[ch] ?? CellType.Floor);
-      if (ch === 'C' || ch === 'X') cubes.push({ x, y });
-      if (ch === 'T' || ch === 'X') targets.push({ x, y });
+      if (ch in CUBE_PALETTE) {
+        cellRow.push(CellType.Floor);
+        cubes.push({ id: ch, x, y });
+      } else {
+        cellRow.push(CHAR_TO_CELL[ch] ?? CellType.Floor);
+      }
     }
     cells.push(cellRow);
   });
 
-  return { id, name, width, height, cells, cubes, targets };
+  return { id, name, width, height, cells, cubes, goal };
 }

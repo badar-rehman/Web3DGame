@@ -18,6 +18,24 @@ export const DIRECTION_DELTA: Record<Direction, Vec2> = {
   right: { x: 1, y: 0 },
 };
 
+/** A movable, identifiable cube. Each id has a fixed color/label (see cubeVisuals.ts). */
+export interface CubeState extends Vec2 {
+  id: string;
+}
+
+/**
+ * A required bond between two cubes: `from` must sit exactly one cardinal
+ * step (dx, dy) away from `to` — e.g. {from:'A', to:'B', dx:0, dy:-1} means
+ * "A sits directly above B". Goals are translation-invariant: the whole
+ * formation can be assembled anywhere on the board.
+ */
+export interface RelationEdge {
+  from: string;
+  to: string;
+  dx: number;
+  dy: number;
+}
+
 export interface LevelData {
   id: number;
   name: string;
@@ -25,8 +43,8 @@ export interface LevelData {
   height: number;
   /** Row-major grid: cells[row][col]. */
   cells: CellType[][];
-  /** Starting positions of movable cubes. */
-  cubes: Vec2[];
-  /** Grid cells a cube must occupy to win. */
-  targets: Vec2[];
+  /** Starting positions of movable, identified cubes. */
+  cubes: CubeState[];
+  /** The relative formation that must be assembled to win. */
+  goal: RelationEdge[];
 }

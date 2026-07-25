@@ -4,8 +4,8 @@ export interface GridQuery {
   isBlocked(x: number, y: number): boolean;
 }
 
-export interface SlideResult {
-  positions: Vec2[];
+export interface SlideResult<T extends Vec2> {
+  positions: T[];
   moved: boolean;
 }
 
@@ -20,7 +20,7 @@ function key(v: Vec2): string {
  * of travel are resolved first, so a cube that can't move (e.g. blocked by a
  * wall) correctly blocks the cube behind it from moving into its cell too.
  */
-export function computeStep(cubes: Vec2[], direction: Direction, grid: GridQuery): SlideResult {
+export function computeStep<T extends Vec2>(cubes: T[], direction: Direction, grid: GridQuery): SlideResult<T> {
   const delta = DIRECTION_DELTA[direction];
   const order = cubes
     .map((_, i) => i)
@@ -31,7 +31,7 @@ export function computeStep(cubes: Vec2[], direction: Direction, grid: GridQuery
       return delta.y > 0 ? cubes[b].y - cubes[a].y : cubes[a].y - cubes[b].y;
     });
 
-  const positions: Vec2[] = cubes.map((c) => ({ ...c }));
+  const positions: T[] = cubes.map((c) => ({ ...c }));
   const occupied = new Set(cubes.map(key));
 
   for (const idx of order) {
@@ -39,7 +39,8 @@ export function computeStep(cubes: Vec2[], direction: Direction, grid: GridQuery
     occupied.delete(key(start));
 
     const next = { x: start.x + delta.x, y: start.y + delta.y };
-    const final = grid.isBlocked(next.x, next.y) || occupied.has(key(next)) ? start : next;
+    const blocked = grid.isBlocked(next.x, next.y) || occupied.has(key(next));
+    const final: T = blocked ? start : { ...start, x: next.x, y: next.y };
 
     positions[idx] = final;
     occupied.add(key(final));

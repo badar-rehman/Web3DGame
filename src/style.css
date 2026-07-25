@@ -130,27 +130,64 @@ button {
 
 #goal-grid {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   justify-content: center;
 }
 
 .goal-cell {
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.06);
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  background: transparent;
 }
 
-.goal-cell.wall {
-  background: rgba(255, 255, 255, 0.18);
+.goal-cell.cube {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(11, 14, 26, 0.85);
+  background: var(--cube-color, rgba(255, 255, 255, 0.2));
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.goal-cell.target {
-  background: var(--accent-2);
-  box-shadow: 0 0 6px var(--accent-2);
+.goal-cell.cube.satisfied {
+  box-shadow: 0 0 10px 2px var(--cube-color, #fff), 0 0 0 2px rgba(255, 255, 255, 0.7) inset;
+  transform: scale(1.08);
 }
 
-.goal-cell.target.filled {
+#goal-relations {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--panel-border);
+}
+
+.relation-item {
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.2s ease;
+}
+
+.relation-item .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  flex: none;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.relation-item.satisfied {
+  color: var(--text);
+}
+
+.relation-item.satisfied .dot {
   background: #6ef58e;
   box-shadow: 0 0 6px #6ef58e;
 }

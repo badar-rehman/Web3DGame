@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { CellType, LevelData, Vec2 } from './types';
+import { CellType, CubeState, LevelData } from './types';
+import { cubeVisual } from './cubeVisuals';
 
 export const CELL_SIZE = 1.5;
 const TILE_HEIGHT = 0.25;
@@ -13,10 +14,9 @@ const COLOR = {
   floorB: 0x313a5e,
   wall: 0x4b5580,
   obstacle: 0x8a6a45,
-  target: 0xf5b26e,
-  cube: 0x6ee7f5,
-  cubeOnTarget: 0x6ef58e,
 };
+
+const GLOW_COLOR = 0xffffff;
 
 interface CubeAnim {
   from: THREE.Vector3;
@@ -24,13 +24,36 @@ interface CubeAnim {
   start: number;
 }
 
+interface CubeEntry {
+  mesh: THREE.Mesh;
+  materials: THREE.MeshStandardMaterial[];
+}
+
+function createLabelTexture(label: string, bgColor: string): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = 'rgba(11, 14, 26, 0.85)';
+  ctx.font = 'bold 76px -apple-system, Segoe UI, Roboto, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, size / 2, size / 2 + 4);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 export class GameScene {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera!: THREE.OrthographicCamera;
-  private cubeMeshes: THREE.Mesh[] = [];
-  private cubeAnims = new Map<number, CubeAnim>();
-  private targetSet = new Set<string>();
+  private cubes = new Map<string, CubeEntry>();
+  private cubeAnims = new Map<string, CubeAnim>();
+  private glowingIds = new Set<string>();
   private level!: LevelData;
   private levelGroup = new THREE.Group();
   private onSettled: (() => void) | null = null;
@@ -111,17 +134,18 @@ export class GameScene {
     if (this.level) this.frameCameraToLevel();
   }
 
-  loadLevel(level: LevelData, cubes: Vec2[]) {
+  loadLevel(level: LevelData, cubes: CubeState[]) {
     this.level = level;
-    this.targetSet = new Set(level.targets.map((t) => `${t.x},${t.y}`));
     this.cubeAnims.clear();
+    this.glowingIds.clear();
     this.animating = false;
 
     while (this.levelGroup.children.length) {
       const child = this.levelGroup.children.pop()!;
       disposeObject(child);
     }
-    this.cubeMeshes = [];
+    this.cubes.forEach((entry) => disposeObject(entry.mesh));
+    this.cubes.clear();
 
     this.buildBoard();
     this.buildCubes(cubes);
@@ -132,21 +156,11 @@ export class GameScene {
     const floorGeo = new THREE.BoxGeometry(CELL_SIZE * 0.96, TILE_HEIGHT, CELL_SIZE * 0.96);
     const wallGeo = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE);
     const obstacleGeo = new THREE.IcosahedronGeometry(CELL_SIZE * 0.34, 0);
-    const targetGeo = new THREE.RingGeometry(CELL_SIZE * 0.28, CELL_SIZE * 0.38, 24);
-    targetGeo.rotateX(-Math.PI / 2);
 
     const floorMatA = new THREE.MeshStandardMaterial({ color: COLOR.floorA, roughness: 0.9 });
     const floorMatB = new THREE.MeshStandardMaterial({ color: COLOR.floorB, roughness: 0.9 });
     const wallMat = new THREE.MeshStandardMaterial({ color: COLOR.wall, roughness: 0.7 });
     const obstacleMat = new THREE.MeshStandardMaterial({ color: COLOR.obstacle, roughness: 0.8, flatShading: true });
-    const targetMat = new THREE.MeshStandardMaterial({
-      color: COLOR.target,
-      emissive: COLOR.target,
-      emissiveIntensity: 0.6,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.9,
-    });
 
     for (let y = 0; y < this.level.height; y++) {
       for (let x = 0; x < this.level.width; x++) {
@@ -167,13 +181,6 @@ export class GameScene {
         floor.receiveShadow = true;
         this.levelGroup.add(floor);
 
-        if (this.targetSet.has(`${x},${y}`)) {
-          const ring = new THREE.Mesh(targetGeo, targetMat);
-          ring.position.set(wx, TILE_HEIGHT + 0.02, wz);
-          ring.userData.isTargetMarker = true;
-          this.levelGroup.add(ring);
-        }
-
         if (cell === CellType.Obstacle) {
           const rock = new THREE.Mesh(obstacleGeo, obstacleMat);
           rock.position.set(wx, TILE_HEIGHT + OBSTACLE_HEIGHT * 0.4, wz);
@@ -186,26 +193,27 @@ export class GameScene {
     }
   }
 
-  private buildCubes(cubes: Vec2[]) {
+  private buildCubes(cubes: CubeState[]) {
     const geo = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
-    cubes.forEach((pos) => {
-      const mat = new THREE.MeshStandardMaterial({
-        color: this.isOnTarget(pos) ? COLOR.cubeOnTarget : COLOR.cube,
-        roughness: 0.35,
-        metalness: 0.15,
+    cubes.forEach((cube) => {
+      const visual = cubeVisual(cube.id);
+      const sideMat = new THREE.MeshStandardMaterial({ color: visual.color, roughness: 0.4, metalness: 0.1 });
+      const topMat = new THREE.MeshStandardMaterial({
+        map: createLabelTexture(visual.label, visual.cssColor),
+        roughness: 0.3,
+        metalness: 0.1,
       });
-      const mesh = new THREE.Mesh(geo, mat);
-      const { wx, wz } = this.toWorld(pos.x, pos.y);
+      // BoxGeometry face group order: +x, -x, +y (top), -y (bottom), +z, -z
+      const materials = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
+
+      const mesh = new THREE.Mesh(geo, materials);
+      const { wx, wz } = this.toWorld(cube.x, cube.y);
       mesh.position.set(wx, TILE_HEIGHT + CUBE_SIZE / 2, wz);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       this.levelGroup.add(mesh);
-      this.cubeMeshes.push(mesh);
+      this.cubes.set(cube.id, { mesh, materials });
     });
-  }
-
-  private isOnTarget(pos: Vec2): boolean {
-    return this.targetSet.has(`${pos.x},${pos.y}`);
   }
 
   private toWorld(x: number, y: number): { wx: number; wz: number } {
@@ -213,31 +221,36 @@ export class GameScene {
   }
 
   /** Animate cubes to new grid positions. Calls onSettled once the animation finishes. */
-  animateCubesTo(positions: Vec2[], onSettled: () => void) {
+  animateCubesTo(positions: CubeState[], onSettled: () => void) {
     const now = performance.now();
     this.onSettled = onSettled;
     this.animating = true;
-    positions.forEach((pos, i) => {
-      const mesh = this.cubeMeshes[i];
-      if (!mesh) return;
+    positions.forEach((pos) => {
+      const entry = this.cubes.get(pos.id);
+      if (!entry) return;
       const { wx, wz } = this.toWorld(pos.x, pos.y);
-      this.cubeAnims.set(i, {
-        from: mesh.position.clone(),
+      this.cubeAnims.set(pos.id, {
+        from: entry.mesh.position.clone(),
         to: new THREE.Vector3(wx, TILE_HEIGHT + CUBE_SIZE / 2, wz),
         start: now,
       });
-      (mesh.material as THREE.MeshStandardMaterial).color.set(this.isOnTarget(pos) ? COLOR.cubeOnTarget : COLOR.cube);
     });
+  }
+
+  /** Cubes currently participating in a satisfied formation bond get a pulsing glow. */
+  setGlowingCubes(ids: Set<string>) {
+    this.glowingIds = ids;
   }
 
   private updateAnims(now: number) {
     if (this.cubeAnims.size === 0) return;
     let allDone = true;
-    for (const [i, anim] of this.cubeAnims) {
-      const mesh = this.cubeMeshes[i];
+    for (const [id, anim] of this.cubeAnims) {
+      const entry = this.cubes.get(id);
+      if (!entry) continue;
       const t = Math.min(1, (now - anim.start) / MOVE_DURATION_MS);
       const eased = 1 - Math.pow(1 - t, 3);
-      mesh.position.lerpVectors(anim.from, anim.to, eased);
+      entry.mesh.position.lerpVectors(anim.from, anim.to, eased);
       if (t < 1) allDone = false;
     }
     if (allDone) {
@@ -249,6 +262,19 @@ export class GameScene {
     }
   }
 
+  private updateGlow(now: number) {
+    const pulse = 0.35 + Math.sin(now * 0.006) * 0.2;
+    this.cubes.forEach((entry, id) => {
+      const isGlowing = this.glowingIds.has(id);
+      const intensity = isGlowing ? pulse : 0;
+      const color = isGlowing ? GLOW_COLOR : 0x000000;
+      entry.materials.forEach((mat) => {
+        mat.emissive.setHex(color);
+        mat.emissiveIntensity = intensity;
+      });
+    });
+  }
+
   isAnimating(): boolean {
     return this.animating;
   }
@@ -256,11 +282,7 @@ export class GameScene {
   render() {
     const now = performance.now();
     this.updateAnims(now);
-    this.levelGroup.children.forEach((child) => {
-      if (child.userData.isTargetMarker) {
-        child.scale.setScalar(1 + Math.sin(now * 0.003) * 0.06);
-      }
-    });
+    this.updateGlow(now);
     this.renderer.render(this.scene, this.camera);
   }
 }

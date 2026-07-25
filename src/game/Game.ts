@@ -2,15 +2,16 @@ import { GameScene } from './GameScene';
 import { InputController } from './InputController';
 import { UIManager } from './UIManager';
 import { computeStep } from './MovementSolver';
+import { evaluateFormation } from './formation';
 import { LEVELS, getLevel } from './levels';
-import { CellType, Direction, LevelData, Vec2 } from './types';
+import { CellType, CubeState, Direction, LevelData } from './types';
 
 export class Game {
   private scene: GameScene;
   private input: InputController;
   private ui: UIManager;
   private level!: LevelData;
-  private cubes: Vec2[] = [];
+  private cubes: CubeState[] = [];
   private moves = 0;
   private won = false;
 
@@ -51,9 +52,9 @@ export class Game {
     this.scene.loadLevel(level, this.cubes);
     this.ui.showLevel(level);
     this.ui.setMoves(0);
-    this.ui.updateGoalFill(this.cubes);
     this.ui.setNextLevelAvailable(id < LEVELS.length);
     this.input.setEnabled(true);
+    this.refreshFormationStatus();
   }
 
   private restartLevel() {
@@ -72,15 +73,17 @@ export class Game {
     this.input.setEnabled(false);
 
     this.scene.animateCubesTo(positions, () => {
-      this.ui.updateGoalFill(this.cubes);
       this.input.setEnabled(true);
-      if (this.checkWin()) this.handleWin();
+      const solved = this.refreshFormationStatus();
+      if (solved) this.handleWin();
     });
   }
 
-  private checkWin(): boolean {
-    const targetSet = new Set(this.level.targets.map((t) => `${t.x},${t.y}`));
-    return this.cubes.every((c) => targetSet.has(`${c.x},${c.y}`));
+  private refreshFormationStatus(): boolean {
+    const status = evaluateFormation(this.cubes, this.level.goal);
+    this.ui.updateFormationStatus(status);
+    this.scene.setGlowingCubes(status.glowingCubeIds);
+    return status.solved;
   }
 
   private handleWin() {

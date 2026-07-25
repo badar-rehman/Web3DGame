@@ -1,4 +1,6 @@
-import { CellType, LevelData, Vec2 } from './types';
+import { LevelData } from './types';
+import { cubeVisual } from './cubeVisuals';
+import { computeRelativeLayout, relationText, FormationStatus } from './formation';
 
 const PROGRESS_KEY = 'cube-shift-progress';
 
@@ -37,6 +39,7 @@ export class UIManager {
   private levelLabel = document.getElementById('level-label')!;
   private moveCounter = document.getElementById('move-counter')!;
   private goalGrid = document.getElementById('goal-grid')!;
+  private goalRelations = document.getElementById('goal-relations')!;
   private restartBtn = document.getElementById('restart-btn')!;
   private levelsBtn = document.getElementById('levels-btn')!;
   private winOverlay = document.getElementById('win-overlay')!;
@@ -48,7 +51,8 @@ export class UIManager {
   private closeLevelSelectBtn = document.getElementById('close-level-select-btn')!;
   private swipeHint = document.getElementById('swipe-hint')!;
 
-  private goalCells = new Map<string, HTMLDivElement>();
+  private goalCubeCells = new Map<string, HTMLDivElement>();
+  private relationItems: HTMLDivElement[] = [];
   private progress: Progress;
 
   constructor(private callbacks: UICallbacks) {
@@ -75,34 +79,71 @@ export class UIManager {
   showLevel(level: LevelData) {
     this.levelLabel.textContent = `Level ${level.id} — ${level.name}`;
     this.hideWin();
-    this.buildGoalGrid(level);
+    this.buildGoalDiagram(level);
+    this.buildRelationChecklist(level);
   }
 
-  private buildGoalGrid(level: LevelData) {
+  private buildGoalDiagram(level: LevelData) {
     this.goalGrid.innerHTML = '';
-    this.goalCells.clear();
-    this.goalGrid.style.gridTemplateColumns = `repeat(${level.width}, 16px)`;
+    this.goalCubeCells.clear();
 
-    const targetSet = new Set(level.targets.map((t) => `${t.x},${t.y}`));
-    for (let y = 0; y < level.height; y++) {
-      for (let x = 0; x < level.width; x++) {
+    const layout = computeRelativeLayout(level.goal);
+    if (layout.size === 0) return;
+
+    const xs = [...layout.values()].map((p) => p.x);
+    const ys = [...layout.values()].map((p) => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const width = maxX - minX + 1;
+    const height = maxY - minY + 1;
+
+    const grid: (string | null)[][] = Array.from({ length: height }, () => Array(width).fill(null));
+    layout.forEach((pos, id) => {
+      grid[pos.y - minY][pos.x - minX] = id;
+    });
+
+    this.goalGrid.style.gridTemplateColumns = `repeat(${width}, 22px)`;
+
+    grid.forEach((row) => {
+      row.forEach((id) => {
         const div = document.createElement('div');
         div.className = 'goal-cell';
-        const isTarget = targetSet.has(`${x},${y}`);
-        if (level.cells[y][x] === CellType.Wall) div.classList.add('wall');
-        if (isTarget) {
-          div.classList.add('target');
-          this.goalCells.set(`${x},${y}`, div);
+        if (id) {
+          const visual = cubeVisual(id);
+          div.classList.add('cube');
+          div.style.setProperty('--cube-color', visual.cssColor);
+          div.textContent = visual.label;
+          this.goalCubeCells.set(id, div);
         }
         this.goalGrid.appendChild(div);
-      }
-    }
+      });
+    });
   }
 
-  updateGoalFill(cubes: Vec2[]) {
-    const occupied = new Set(cubes.map((c) => `${c.x},${c.y}`));
-    this.goalCells.forEach((div, key) => {
-      div.classList.toggle('filled', occupied.has(key));
+  private buildRelationChecklist(level: LevelData) {
+    this.goalRelations.innerHTML = '';
+    this.relationItems = level.goal.map((edge) => {
+      const item = document.createElement('div');
+      item.className = 'relation-item';
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      const text = document.createElement('span');
+      text.textContent = relationText(edge);
+      item.appendChild(dot);
+      item.appendChild(text);
+      this.goalRelations.appendChild(item);
+      return item;
+    });
+  }
+
+  updateFormationStatus(status: FormationStatus) {
+    this.goalCubeCells.forEach((div, id) => {
+      div.classList.toggle('satisfied', status.glowingCubeIds.has(id));
+    });
+    this.relationItems.forEach((item, i) => {
+      item.classList.toggle('satisfied', status.satisfiedEdges.has(i));
     });
   }
 

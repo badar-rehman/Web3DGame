@@ -1,50 +1,78 @@
-import { LevelData } from './types';
+import { LevelData, RelationEdge } from './types';
 import { parseLevel } from './levelParser';
 
 // Layouts are authored as ASCII art and parsed into LevelData.
-// '.' floor · '#' wall · 'O' obstacle · 'C' cube start · 'T' target
-// Every layout below has been verified solvable via BFS over the exact
-// move rules used at runtime (see MovementSolver.computeStep).
-const RAW_LEVELS: string[][] = [
-  // 1. Tutorial: one cube, no obstacles.
-  ['.....', '.C...', '.....', '...T.', '.....'],
+// '.' floor · '#' wall · 'O' obstacle · a letter (A, B, C, ...) is a cube start.
+// Every layout + goal below has been verified solvable via BFS over the exact
+// move rules used at runtime (see MovementSolver.computeStep / formation.ts).
+interface RawLevel {
+  name: string;
+  rows: string[];
+  goal: RelationEdge[];
+}
 
-  // 2. Two cubes: an obstacle stops one cube short while the other reaches the wall.
-  ['#######', '#C...T#', '#.....#', '#.....#', '#CTO..#', '#######'],
-
-  // 3. Two cubes must detour sideways around obstacles blocking a straight path down.
-  ['#######', '#.....#', '#.C.C.#', '#.O.O.#', '#.T.T.#', '#.....#', '#######'],
-
-  // 4. Bigger arena, symmetric obstacles.
-  ['#######', '#C...C#', '#.#O#.#', '#.....#', '#.#O#.#', '#T...T#', '#######'],
-
-  // 5. Real maze: walls force a winding multi-turn route.
-  [
-    '########',
-    '#C.....#',
-    '#.####.#',
-    '#.#T#..#',
-    '#.#.##.#',
-    '#....#C#',
-    '#.####.#',
-    '#..T...#',
-    '########',
-  ],
-
-  // 6. Dense obstacle grid — the hardest level.
-  ['########', '#C....C#', '#.OO.OO#', '#......#', '#.OO.OO#', '#T....T#', '########'],
+const RAW_LEVELS: RawLevel[] = [
+  {
+    name: 'First Bond',
+    rows: ['#######', '#.....#', '#.....#', '#A..B.#', '#.....#', '#.....#', '#######'],
+    goal: [{ from: 'A', to: 'B', dx: -1, dy: 0 }],
+  },
+  {
+    name: 'L Formation',
+    rows: ['#######', '#.....#', '#CA...#', '#.....#', '#.B...#', '#.....#', '#######'],
+    goal: [
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'C', to: 'B', dx: -1, dy: 0 },
+    ],
+  },
+  {
+    name: 'Vertical Chain',
+    rows: ['#######', '#A....#', '#..O..#', '#.....#', '#B....#', '#..C..#', '#######'],
+    goal: [
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'B', to: 'C', dx: 0, dy: -1 },
+    ],
+  },
+  {
+    name: 'Maze Bond',
+    rows: [
+      '########',
+      '#A.....#',
+      '#.####.#',
+      '#.#B#..#',
+      '#.#.##.#',
+      '#....#.#',
+      '#.####C#',
+      '#......#',
+      '########',
+    ],
+    goal: [
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'C', to: 'B', dx: 1, dy: 0 },
+    ],
+  },
+  {
+    name: 'Staggered Square',
+    rows: ['########', '#A....D#', '#.OO...#', '#..O...#', '#...O..#', '#B....C#', '########'],
+    goal: [
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'C', to: 'B', dx: -1, dy: 0 },
+      { from: 'D', to: 'C', dx: 0, dy: -1 },
+    ],
+  },
+  {
+    name: 'Full Square',
+    rows: ['########', '#A....D#', '#.OO...#', '#.OO...#', '#B....C#', '########'],
+    goal: [
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'C', to: 'B', dx: -1, dy: 0 },
+      { from: 'D', to: 'C', dx: 0, dy: -1 },
+      { from: 'D', to: 'A', dx: -1, dy: 0 },
+    ],
+  },
 ];
 
-const LEVEL_NAMES = [
-  'First Slide',
-  'Blocked Path',
-  'Detour',
-  'Twin Obstacles',
-  'The Maze',
-  'Cube Grid',
-];
-
-export const LEVELS: LevelData[] = RAW_LEVELS.map((rows, i) => parseLevel(i + 1, LEVEL_NAMES[i], rows));
+export const LEVELS: LevelData[] = RAW_LEVELS.map((raw, i) => parseLevel(i + 1, raw.name, raw.rows, raw.goal));
 
 export function getLevel(id: number): LevelData | undefined {
   return LEVELS.find((l) => l.id === id);

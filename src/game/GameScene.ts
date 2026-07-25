@@ -46,17 +46,21 @@ interface BgLayer {
   darken: number; // 0 = full color, 1 = fully black — deeper layers are darker for depth cueing
 }
 
-// Three depth bands (near/mid/far) instead of one flat scatter, so the
-// swarm reads as layers floating at different depths rather than a single
-// random cloud.
+// Four depth bands (near/mid/far/deep) instead of one flat scatter, so the
+// swarm reads as a dense field of layers floating at different depths rather
+// than a single sparse cloud.
 const BG_LAYERS: BgLayer[] = [
-  { count: 8, radiusMin: 10, radiusMax: 15, heightMin: -7, heightMax: 3, sizeMin: 1.4, sizeMax: 3.2, darken: 0.15 },
-  { count: 9, radiusMin: 15, radiusMax: 21, heightMin: -10, heightMax: 4, sizeMin: 2.2, sizeMax: 4.4, darken: 0.4 },
-  { count: 9, radiusMin: 21, radiusMax: 28, heightMin: -12, heightMax: 5, sizeMin: 3, sizeMax: 6, darken: 0.62 },
+  { count: 14, radiusMin: 10, radiusMax: 15, heightMin: -7, heightMax: 3, sizeMin: 1.4, sizeMax: 3.2, darken: 0.15 },
+  { count: 16, radiusMin: 15, radiusMax: 21, heightMin: -10, heightMax: 4, sizeMin: 2.2, sizeMax: 4.4, darken: 0.4 },
+  { count: 18, radiusMin: 21, radiusMax: 28, heightMin: -12, heightMax: 5, sizeMin: 3, sizeMax: 6, darken: 0.62 },
+  { count: 20, radiusMin: 28, radiusMax: 38, heightMin: -15, heightMax: 6, sizeMin: 4, sizeMax: 8, darken: 0.8 },
 ];
 const BG_DARK_COLORS = [0x1a2038, 0x202a4a, 0x161b30, 0x252f52];
 const BG_ACCENT_COLORS = [0x6ee7f5, 0xf5b26e, 0xf56ea8, 0x8af56e, 0xf5e26e, 0xa56ef5];
 const BG_ACCENT_EVERY = 7;
+// How much wider the camera frustum is than the level's own tight bounds,
+// purely to leave room for the background swarm to be visible around it.
+const BG_BREATHING_ROOM = 1.7;
 
 const PIPE_RADIUS = 0.07;
 const PIPE_Y = FLOOR_Y + 0.32;
@@ -523,7 +527,10 @@ export class GameScene {
     const aspect = this.renderer.domElement.clientWidth / Math.max(1, this.renderer.domElement.clientHeight);
     const halfW = Math.max(Math.abs(minX), Math.abs(maxX)) + PADDING;
     const halfH = Math.max(Math.abs(minY), Math.abs(maxY)) + PADDING;
-    const halfSize = Math.max(halfH, halfW / aspect);
+    // Zoom out beyond the level's own tight bounds so the background swarm
+    // has real screen space to read as layered depth instead of being
+    // clipped by an orthographic frustum sized to just the playfield.
+    const halfSize = Math.max(halfH, halfW / aspect) * BG_BREATHING_ROOM;
     this.camera.left = -halfSize * aspect;
     this.camera.right = halfSize * aspect;
     this.camera.top = halfSize;

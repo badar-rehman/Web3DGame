@@ -132,6 +132,8 @@ interface CubeEntry {
   /** One independent material per cardinal side, so only the face touching a satisfied bond's partner glows. */
   sideMaterials: Record<Direction, THREE.MeshStandardMaterial>;
   sideGlow: Record<Direction, ScalarTween>;
+  /** Glow bar along each top-face edge — mirrors sideGlow but stays visible even when the side face itself is squeezed between cubes. */
+  topEdgeMaterials: Record<Direction, THREE.MeshBasicMaterial>;
   edgeMaterial: THREE.MeshBasicMaterial;
   glowDecal: THREE.Mesh;
   glowDecalMaterial: THREE.MeshBasicMaterial;
@@ -275,6 +277,8 @@ function edgeCylinder(a: THREE.Vector3, b: THREE.Vector3, radius: number, materi
   return mesh;
 }
 
+// Bottom + vertical edges only — the 4 top edges are handled separately below
+// as per-direction glow bars, so they aren't duplicated here.
 const BOX_EDGES: [THREE.Vector3, THREE.Vector3][] = (() => {
   const h = CUBE_SIZE / 2;
   const corners = [
@@ -292,10 +296,6 @@ const BOX_EDGES: [THREE.Vector3, THREE.Vector3][] = (() => {
     [1, 2],
     [2, 3],
     [3, 0],
-    [4, 5],
-    [5, 6],
-    [6, 7],
-    [7, 4],
     [0, 4],
     [1, 5],
     [2, 6],
@@ -303,6 +303,27 @@ const BOX_EDGES: [THREE.Vector3, THREE.Vector3][] = (() => {
   ];
   return pairs.map(([i, j]) => [corners[i], corners[j]]);
 })();
+
+// The top face's 4 perimeter edges, one per cardinal grid direction — always
+// fully visible from the fixed isometric camera (unlike the vertical side
+// faces, which get squeezed out of view between adjacent cubes). Each one
+// gets its own glow bar so a satisfied bond is legible by looking straight
+// down at the cube, no matter what's blocking its side.
+const TOP_EDGE_BY_DIR: Record<Direction, [THREE.Vector3, THREE.Vector3]> = (() => {
+  const h = CUBE_SIZE / 2;
+  const backLeft = new THREE.Vector3(-h, h, -h);
+  const backRight = new THREE.Vector3(h, h, -h);
+  const frontRight = new THREE.Vector3(h, h, h);
+  const frontLeft = new THREE.Vector3(-h, h, h);
+  return {
+    up: [backLeft, backRight],
+    right: [backRight, frontRight],
+    down: [frontRight, frontLeft],
+    left: [frontLeft, backLeft],
+  };
+})();
+const TOP_EDGE_RADIUS = EDGE_RADIUS * 1.8;
+const TOP_EDGE_LIT_BRIGHTNESS = 3.4;
 
 const GLOW_TEXTURE = createGlowTexture();
 const SIDE_TEXTURES = buildSideTextures();
@@ -648,6 +669,14 @@ export class GameScene {
       const edgeMat = new THREE.MeshBasicMaterial({ color: baseColor.clone().multiplyScalar(EDGE_BASE_BRIGHTNESS) });
       BOX_EDGES.forEach(([a, b]) => group.add(edgeCylinder(a, b, EDGE_RADIUS, edgeMat)));
 
+      const topEdgeMaterials: Record<Direction, THREE.MeshBasicMaterial> = {} as Record<Direction, THREE.MeshBasicMaterial>;
+      SIDE_DIRECTIONS.forEach((dir) => {
+        const mat = new THREE.MeshBasicMaterial({ color: baseColor.clone().multiplyScalar(EDGE_BASE_BRIGHTNESS) });
+        topEdgeMaterials[dir] = mat;
+        const [a, b] = TOP_EDGE_BY_DIR[dir];
+        group.add(edgeCylinder(a, b, TOP_EDGE_RADIUS, mat));
+      });
+
       const { wx, wz } = this.toWorld(cube.x, cube.y);
       group.position.set(wx, FLOOR_Y + CUBE_SIZE / 2, wz);
       this.levelGroup.add(group);
@@ -674,6 +703,7 @@ export class GameScene {
         topMaterial: topMat,
         sideMaterials,
         sideGlow,
+        topEdgeMaterials,
         edgeMaterial: edgeMat,
         glowDecal,
         glowDecalMaterial,
@@ -819,6 +849,7 @@ export class GameScene {
         SIDE_DIRECTIONS.forEach((dir) => {
           entry.sideMaterials[dir].emissiveIntensity = symbolIntensity;
           entry.sideGlow[dir] = { from: symbolIntensity, to: symbolIntensity, start: now };
+          entry.topEdgeMaterials[dir].color.copy(entry.baseColor).multiplyScalar(edgeBrightness);
         });
         entry.edgeMaterial.color.copy(entry.baseColor).multiplyScalar(edgeBrightness);
         entry.glowDecalMaterial.opacity = decalOpacity;
@@ -864,13 +895,19 @@ export class GameScene {
       entry.glowDecal.position.x = entry.group.position.x;
       entry.glowDecal.position.z = entry.group.position.z;
 
-      // Each side face glows independently, only when its own specific
-      // bond direction is currently satisfied.
+      // Each side face — and its matching top-edge glow bar, which stays
+      // visible even when the side face itself is squeezed out of view
+      // between adjacent cubes — lights up independently, only when its own
+      // specific bond direction is currently satisfied.
       const satisfiedDirs = this.directionalGlow.get(id);
       SIDE_DIRECTIONS.forEach((dir) => {
         const dirTarget = satisfiedDirs?.has(dir) ? SYMBOL_CONNECTED_INTENSITY : 0;
         const intensity = stepScalarTween(entry.sideGlow[dir], dirTarget, now, GLOW_TRANSITION_MS);
         entry.sideMaterials[dir].emissiveIntensity = intensity;
+
+        const dirBrightness =
+          EDGE_BASE_BRIGHTNESS + (TOP_EDGE_LIT_BRIGHTNESS - EDGE_BASE_BRIGHTNESS) * (intensity / SYMBOL_CONNECTED_INTENSITY);
+        entry.topEdgeMaterials[dir].color.copy(entry.baseColor).multiplyScalar(dirBrightness);
       });
     });
   }

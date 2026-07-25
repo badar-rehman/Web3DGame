@@ -24,7 +24,7 @@ export function cubeVisual(id: string): CubeVisual {
 }
 
 /** Builds the outline path for a symbol, centered in a `size`x`size` box. */
-function buildSymbolPath(shape: SymbolShape, size: number): Path2D {
+export function buildSymbolPath(shape: SymbolShape, size: number): Path2D {
   const c = size / 2;
   const r = size * 0.3;
   const path = new Path2D();

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CellType, CubeState, LevelData } from './types';
-import { SymbolShape, cubeVisual, drawSymbolOutline } from './cubeVisuals';
+import { SymbolShape, buildSymbolPath, cubeVisual } from './cubeVisuals';
 
 export const CELL_SIZE = 1.5;
 const FLOOR_Y = 0.1;
@@ -24,7 +24,10 @@ const EDGE_BASE_BRIGHTNESS = 0.55;
 const EDGE_CELEBRATE_BRIGHTNESS = 2.2;
 const SYMBOL_CONNECTED_INTENSITY = 0.7;
 const SYMBOL_CELEBRATE_INTENSITY = 2.4;
+const DECAL_CELEBRATE_PEAK = 0.85;
 const GLOW_TRANSITION_MS = 420;
+const CELEBRATION_PULSE_COUNT = 3;
+const CELEBRATION_PULSE_MS = 300;
 
 /** Overshoots slightly past the target before settling — a springy "pop". */
 function easeOutBack(t: number, overshoot = 1.70158): number {
@@ -79,16 +82,17 @@ interface SeamTexturePair {
 
 const SEAM_TEX_SIZE = 128;
 const SEAM_INSET = SEAM_TEX_SIZE * 0.08;
-const SEAM_BASE_COLOR = 'rgba(15, 18, 32, 0.4)';
-const SEAM_BASE_WIDTH = 3.5;
-const SEAM_GLOW_WIDTH = 5;
+const SEAM_BASE_WIDTH = 4.5;
+const SEAM_GLOW_WIDTH = 5.5;
 
 /**
- * A cube face is built from two textures: a light base fill with faint
- * carved grooves, and a matching "emissive map" — black everywhere except
- * those same groove lines, drawn bright white. Only the masked lines glow
- * when the material's emissiveIntensity rises, so the light visibly comes
- * out of the carved lines rather than washing the whole face.
+ * A cube face is built from two textures: a light base fill with carved
+ * grooves (a shadow + highlight bevel, so the line reads as physically cut
+ * even under flat lighting), and a matching "emissive map" — black
+ * everywhere except those same groove lines, drawn bright white. Only the
+ * masked lines glow when the material's emissiveIntensity rises, so the
+ * light visibly comes out of the carved lines rather than washing the whole
+ * face.
  */
 function buildSeamTextures(draw: (ctx: CanvasRenderingContext2D, emissive: boolean) => void): SeamTexturePair {
   const size = SEAM_TEX_SIZE;
@@ -114,26 +118,56 @@ function buildSeamTextures(draw: (ctx: CanvasRenderingContext2D, emissive: boole
   return { base, emissive };
 }
 
-function strokeInsetBorder(ctx: CanvasRenderingContext2D, emissive: boolean) {
-  ctx.strokeStyle = emissive ? '#ffffff' : SEAM_BASE_COLOR;
-  ctx.lineWidth = emissive ? SEAM_GLOW_WIDTH : SEAM_BASE_WIDTH;
-  ctx.strokeRect(SEAM_INSET, SEAM_INSET, SEAM_TEX_SIZE - SEAM_INSET * 2, SEAM_TEX_SIZE - SEAM_INSET * 2);
+/** Carved groove: a dark shadow offset one way, a light highlight offset the other, plus a dark core line. */
+function strokeCarvedGroove(ctx: CanvasRenderingContext2D, path: Path2D) {
+  ctx.lineWidth = SEAM_BASE_WIDTH;
+
+  ctx.save();
+  ctx.translate(1.5, 1.5);
+  ctx.strokeStyle = 'rgba(4, 5, 12, 0.65)';
+  ctx.stroke(path);
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(-1.2, -1.2);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.lineWidth = SEAM_BASE_WIDTH * 0.8;
+  ctx.stroke(path);
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(6, 8, 16, 0.7)';
+  ctx.lineWidth = SEAM_BASE_WIDTH * 0.85;
+  ctx.stroke(path);
+}
+
+function strokeGlowLine(ctx: CanvasRenderingContext2D, path: Path2D) {
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = SEAM_GLOW_WIDTH;
+  ctx.stroke(path);
+}
+
+function buildBorderPath(): Path2D {
+  const path = new Path2D();
+  path.rect(SEAM_INSET, SEAM_INSET, SEAM_TEX_SIZE - SEAM_INSET * 2, SEAM_TEX_SIZE - SEAM_INSET * 2);
+  return path;
+}
+
+function buildCrossPath(): Path2D {
+  const mid = SEAM_TEX_SIZE / 2;
+  const path = new Path2D();
+  path.moveTo(mid, SEAM_INSET);
+  path.lineTo(mid, SEAM_TEX_SIZE - SEAM_INSET);
+  path.moveTo(SEAM_INSET, mid);
+  path.lineTo(SEAM_TEX_SIZE - SEAM_INSET, mid);
+  return path;
 }
 
 /** Side faces: an inset border plus a 2x2 cross seam, like carved panel plating. */
 function buildSideTextures(): SeamTexturePair {
-  return buildSeamTextures((ctx, emissive) => {
-    strokeInsetBorder(ctx, emissive);
-    const mid = SEAM_TEX_SIZE / 2;
-    ctx.beginPath();
-    ctx.moveTo(mid, SEAM_INSET);
-    ctx.lineTo(mid, SEAM_TEX_SIZE - SEAM_INSET);
-    ctx.moveTo(SEAM_INSET, mid);
-    ctx.lineTo(SEAM_TEX_SIZE - SEAM_INSET, mid);
-    ctx.strokeStyle = emissive ? '#ffffff' : SEAM_BASE_COLOR;
-    ctx.lineWidth = emissive ? SEAM_GLOW_WIDTH : SEAM_BASE_WIDTH;
-    ctx.stroke();
-  });
+  const combined = new Path2D();
+  combined.addPath(buildBorderPath());
+  combined.addPath(buildCrossPath());
+  return buildSeamTextures((ctx, emissive) => (emissive ? strokeGlowLine(ctx, combined) : strokeCarvedGroove(ctx, combined)));
 }
 
 /** Top face: an inset border plus the cube's symbol carved as an outline (never filled). */
@@ -141,10 +175,10 @@ const topTextureCache = new Map<SymbolShape, SeamTexturePair>();
 function getTopTextures(shape: SymbolShape): SeamTexturePair {
   let pair = topTextureCache.get(shape);
   if (!pair) {
-    pair = buildSeamTextures((ctx, emissive) => {
-      strokeInsetBorder(ctx, emissive);
-      drawSymbolOutline(ctx, shape, SEAM_TEX_SIZE, emissive ? '#ffffff' : SEAM_BASE_COLOR, emissive ? 5.5 : 4);
-    });
+    const combined = new Path2D();
+    combined.addPath(buildBorderPath());
+    combined.addPath(buildSymbolPath(shape, SEAM_TEX_SIZE));
+    pair = buildSeamTextures((ctx, emissive) => (emissive ? strokeGlowLine(ctx, combined) : strokeCarvedGroove(ctx, combined)));
     topTextureCache.set(shape, pair);
   }
   return pair;
@@ -219,6 +253,7 @@ export class GameScene {
   private onSettled: (() => void) | null = null;
   private animating = false;
   private celebrating = false;
+  private celebrationStart = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -523,13 +558,14 @@ export class GameScene {
     this.glowingIds = ids;
   }
 
-  /** Flashes every cube's edges and symbol to full brightness for `durationMs`, then calls onDone. */
-  playWinCelebration(durationMs: number, onDone: () => void) {
+  /** Pulses every cube's edges and symbol brightly a few times, then calls onDone. */
+  playWinCelebration(onDone: () => void) {
     this.celebrating = true;
+    this.celebrationStart = performance.now();
     window.setTimeout(() => {
       this.celebrating = false;
       onDone();
-    }, durationMs);
+    }, CELEBRATION_PULSE_COUNT * CELEBRATION_PULSE_MS);
   }
 
   private updateAnims(now: number) {
@@ -577,12 +613,39 @@ export class GameScene {
   }
 
   private updateGlow(now: number) {
+    if (this.celebrating) {
+      // Rhythmic pulses (bypassing the normal per-cube tween) — each pulse
+      // rises and falls on a smooth sine envelope, like a heartbeat.
+      const elapsed = now - this.celebrationStart;
+      const cycle = (elapsed % CELEBRATION_PULSE_MS) / CELEBRATION_PULSE_MS;
+      const envelope = Math.sin(Math.min(1, cycle) * Math.PI);
+      const symbolIntensity = SYMBOL_CELEBRATE_INTENSITY * envelope;
+      const edgeBrightness = EDGE_BASE_BRIGHTNESS + (EDGE_CELEBRATE_BRIGHTNESS - EDGE_BASE_BRIGHTNESS) * envelope;
+      const decalOpacity = DECAL_CELEBRATE_PEAK * envelope;
+
+      this.cubes.forEach((entry) => {
+        entry.faceMaterials.forEach((mat) => {
+          mat.emissiveIntensity = symbolIntensity;
+        });
+        entry.edgeMaterial.color.copy(entry.baseColor).multiplyScalar(edgeBrightness);
+        entry.glowDecalMaterial.opacity = decalOpacity;
+        entry.glowDecal.position.x = entry.group.position.x;
+        entry.glowDecal.position.z = entry.group.position.z;
+        // Keep the tween state in sync so normal glow resumes smoothly once celebration ends.
+        const current: GlowValues = { symbol: symbolIntensity, edge: edgeBrightness, decal: decalOpacity };
+        entry.glowFrom = { ...current };
+        entry.glowTo = { ...current };
+        entry.glowStart = now;
+      });
+      return;
+    }
+
     this.cubes.forEach((entry, id) => {
       const connected = this.glowingIds.has(id);
       const target: GlowValues = {
-        symbol: this.celebrating ? SYMBOL_CELEBRATE_INTENSITY : connected ? SYMBOL_CONNECTED_INTENSITY : 0,
-        edge: this.celebrating ? EDGE_CELEBRATE_BRIGHTNESS : EDGE_BASE_BRIGHTNESS,
-        decal: this.celebrating ? 0.85 : connected ? 0.45 : 0,
+        symbol: connected ? SYMBOL_CONNECTED_INTENSITY : 0,
+        edge: EDGE_BASE_BRIGHTNESS,
+        decal: connected ? 0.45 : 0,
       };
 
       if (target.symbol !== entry.glowTo.symbol || target.edge !== entry.glowTo.edge || target.decal !== entry.glowTo.decal) {

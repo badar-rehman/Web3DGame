@@ -6,8 +6,6 @@ import { evaluateFormation } from './formation';
 import { LEVELS, getLevel } from './levels';
 import { CellType, CubeState, Direction, LevelData } from './types';
 
-const WIN_CELEBRATION_MS = 950;
-
 export class Game {
   private scene: GameScene;
   private input: InputController;
@@ -107,7 +105,7 @@ export class Game {
 
   private handleWin() {
     this.won = true;
-    this.scene.playWinCelebration(WIN_CELEBRATION_MS, () => {
+    this.scene.playWinCelebration(() => {
       this.ui.markCompleted(this.level.id, LEVELS.length);
       this.ui.setNextLevelAvailable(this.level.id < LEVELS.length);
       this.ui.showWin(this.moves);

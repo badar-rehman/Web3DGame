@@ -4,10 +4,10 @@ import { SymbolShape, buildSymbolPath, cubeVisual } from './cubeVisuals';
 
 export const CELL_SIZE = 1.5;
 const FLOOR_Y = 0.1;
-const FLOOR_TILE_HEIGHT = 0.3;
+const FLOOR_TILE_HEIGHT = 1.3;
 const WALL_HEIGHT = 1.1;
 const OBSTACLE_HEIGHT = 0.65;
-const CUBE_SIZE = 0.92;
+const CUBE_SIZE = 1.32;
 const MOVE_DURATION_MS = 160;
 const MOVE_STAGGER_MS = 30;
 const MOVE_OVERSHOOT = 0.55;

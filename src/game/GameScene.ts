@@ -27,7 +27,7 @@ const SYMBOL_CELEBRATE_INTENSITY = 2.4;
 const DECAL_CELEBRATE_PEAK = 0.85;
 const GLOW_TRANSITION_MS = 420;
 const CELEBRATION_PULSE_COUNT = 3;
-const CELEBRATION_PULSE_MS = 300;
+const CELEBRATION_PULSE_MS = 700;
 
 /** Overshoots slightly past the target before settling — a springy "pop". */
 function easeOutBack(t: number, overshoot = 1.70158): number {

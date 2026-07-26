@@ -56,8 +56,10 @@ body {
 
 #hud-top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+  row-gap: 8px;
   pointer-events: none;
 }
 

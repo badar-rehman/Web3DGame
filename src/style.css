@@ -49,18 +49,18 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
 }
 
-#hud-top {
+#level-bar {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  row-gap: 8px;
-  pointer-events: none;
+  gap: 8px;
+  max-width: calc(100vw - 220px);
 }
 
 #level-label {
@@ -71,6 +71,7 @@ body {
   border-radius: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  text-align: center;
 }
 
 #move-counter {
@@ -105,31 +106,40 @@ button:not(:disabled):active {
   transition-duration: 0.06s;
 }
 
-#restart-btn,
+#action-buttons {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#settings-btn,
 #levels-btn,
+#restart-btn,
 #hint-btn,
-#undo-btn,
-#settings-btn {
+#undo-btn {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(8px);
   color: var(--text);
-  padding: 8px 14px;
-  border-radius: 10px;
-  font-size: 14px;
-}
-
-#settings-btn {
-  padding: 8px 12px;
-  font-size: 16px;
+  border-radius: 14px;
+  font-size: 20px;
   line-height: 1;
 }
 
-#restart-btn:hover,
+#settings-btn:hover,
 #levels-btn:hover,
+#restart-btn:hover,
 #hint-btn:not(:disabled):hover,
-#undo-btn:not(:disabled):hover,
-#settings-btn:hover {
+#undo-btn:not(:disabled):hover {
   background: rgba(110, 231, 245, 0.18);
 }
 
@@ -138,14 +148,11 @@ button:not(:disabled):active {
   opacity: 0.55;
 }
 
-#levels-btn {
-  margin-left: auto;
-}
-
 #goal-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
   pointer-events: auto;
-  align-self: flex-start;
-  margin-top: 12px;
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(8px);
@@ -154,7 +161,8 @@ button:not(:disabled):active {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: calc(100vh - 100px);
+  max-height: calc(100vh - 32px);
+  max-width: 40vw;
   overflow-y: auto;
 }
 
@@ -585,20 +593,18 @@ button:not(:disabled):active {
   }
 }
 
-/* Narrow phones: drop button text (icons stay) so hud-top wraps to fewer
-   rows, and shrink the goal panel's own padding/text — both push its
-   bottom edge higher, leaving more guaranteed clearance above the board. */
+/* Narrow phones: shrink the action buttons and the goal panel's own
+   padding/text — both free up more screen space around the 3D board. */
 @media (max-width: 480px) {
-  .btn-label {
-    display: none;
-  }
-
-  #restart-btn,
+  #settings-btn,
   #levels-btn,
+  #restart-btn,
   #hint-btn,
-  #undo-btn,
-  #settings-btn {
-    padding: 8px 10px;
+  #undo-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 17px;
+    border-radius: 12px;
   }
 
   #goal-panel {

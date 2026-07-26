@@ -82,7 +82,6 @@ export class UIManager {
   private closeLevelSelectBtn = document.getElementById('close-level-select-btn')!;
   private swipeHint = document.getElementById('swipe-hint')!;
   private hintBtn = document.getElementById('hint-btn')! as HTMLButtonElement;
-  private hintBtnLabel = document.getElementById('hint-btn-label')!;
   private hintArrow = document.getElementById('hint-arrow')!;
   private hintToast = document.getElementById('hint-toast')!;
   private undoBtn = document.getElementById('undo-btn')! as HTMLButtonElement;
@@ -256,7 +255,7 @@ export class UIManager {
 
   setHintLoading(loading: boolean) {
     this.hintBtn.disabled = loading;
-    this.hintBtnLabel.textContent = loading ? '…' : 'Hint';
+    this.hintBtn.textContent = loading ? '⏳' : '💡';
   }
 
   showHintDirection(direction: Direction) {

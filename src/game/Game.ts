@@ -4,17 +4,33 @@ import { UIManager } from './UIManager';
 import { computeStep } from './MovementSolver';
 import { evaluateFormation } from './formation';
 import { HintManager } from './HintManager';
+import { SoundManager } from './SoundManager';
 import { LEVELS, getLevel } from './levels';
 import { CellType, CubeState, Direction, LevelData } from './types';
+
+const OPPOSITE_DIRECTION: Record<Direction, Direction> = {
+  up: 'down',
+  down: 'up',
+  left: 'right',
+  right: 'left',
+};
+
+interface HistoryEntry {
+  cubes: CubeState[];
+  dir: Direction;
+}
 
 export class Game {
   private scene: GameScene;
   private input: InputController;
   private ui: UIManager;
   private hints = new HintManager();
+  private sounds = new SoundManager();
   private level!: LevelData;
   private cubes: CubeState[] = [];
+  private history: HistoryEntry[] = [];
   private moves = 0;
+  private satisfiedCount = 0;
   private won = false;
   private failed = false;
   private hintPending = false;
@@ -31,8 +47,11 @@ export class Game {
         this.ui.openLevelSelect();
       },
       onHint: () => this.requestHint(),
+      onUndo: () => this.requestUndo(),
+      onToggleMute: () => this.ui.setMuted(this.sounds.toggleMute()),
     });
     this.input = new InputController(canvas, (dir) => this.handleDirection(dir));
+    this.ui.setMuted(this.sounds.isMuted());
 
     const progress = this.ui.getProgress();
     const startId = Math.min(Math.max(progress.highestUnlocked, 1), LEVELS.length);
@@ -55,7 +74,9 @@ export class Game {
     const level = getLevel(id) ?? LEVELS[0];
     this.level = level;
     this.cubes = level.cubes.map((c) => ({ ...c }));
+    this.history = [];
     this.moves = 0;
+    this.satisfiedCount = 0;
     this.won = false;
     this.failed = false;
     this.hintPending = false;
@@ -84,11 +105,15 @@ export class Game {
     );
 
     if (!moved) {
+      this.sounds.playBump();
       this.input.setEnabled(false);
       this.scene.animateCubesTo(positions, blockedIds, dir, () => this.input.setEnabled(true));
       return;
     }
 
+    this.sounds.playMove();
+    this.history.push({ cubes: this.cubes, dir });
+    this.ui.setUndoAvailable(true);
     this.cubes = positions;
     this.moves += 1;
     this.ui.setMoves(this.moves);
@@ -124,15 +149,38 @@ export class Game {
       }
       this.ui.setHintLoading(false);
       if (direction) {
+        this.sounds.playHintFound();
         this.ui.showHintDirection(direction);
       } else {
+        this.sounds.playHintUnavailable();
         this.ui.showHintUnavailable();
       }
     });
   }
 
+  private requestUndo() {
+    if (this.won || this.failed || this.scene.isAnimating() || this.history.length === 0) return;
+
+    const entry = this.history.pop()!;
+    this.ui.setUndoAvailable(this.history.length > 0);
+    this.cubes = entry.cubes;
+    this.moves = Math.max(0, this.moves - 1);
+    this.ui.setMoves(this.moves);
+    this.sounds.playUndo();
+    this.input.setEnabled(false);
+
+    // No cube is "blocked" here — every cube is placed exactly back where it
+    // was, so the reverse direction only affects the (unused) bump offset.
+    this.scene.animateCubesTo(this.cubes, new Set(), OPPOSITE_DIRECTION[entry.dir], () => {
+      this.input.setEnabled(true);
+      this.refreshFormationStatus();
+    });
+  }
+
   private refreshFormationStatus(): boolean {
     const status = evaluateFormation(this.cubes, this.level.goal);
+    if (status.satisfiedEdges.size > this.satisfiedCount) this.sounds.playBondConnect();
+    this.satisfiedCount = status.satisfiedEdges.size;
     this.ui.updateFormationStatus(status);
     this.scene.setGlowingCubes(status.glowingCubeIds);
     this.scene.setBondDirections(status.directionalGlow);
@@ -141,11 +189,13 @@ export class Game {
 
   private handleFail() {
     this.failed = true;
+    this.sounds.playFail();
     this.ui.showFail();
   }
 
   private handleWin() {
     this.won = true;
+    this.sounds.playWin();
     this.scene.playWinCelebration(() => {
       this.ui.markCompleted(this.level.id, LEVELS.length);
       this.ui.setNextLevelAvailable(this.level.id < LEVELS.length);

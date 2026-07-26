@@ -107,7 +107,9 @@ button:not(:disabled):active {
 
 #restart-btn,
 #levels-btn,
-#hint-btn {
+#hint-btn,
+#undo-btn,
+#mute-btn {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(8px);
@@ -117,13 +119,22 @@ button:not(:disabled):active {
   font-size: 14px;
 }
 
+#mute-btn {
+  padding: 8px 12px;
+  font-size: 16px;
+  line-height: 1;
+}
+
 #restart-btn:hover,
 #levels-btn:hover,
-#hint-btn:not(:disabled):hover {
+#hint-btn:not(:disabled):hover,
+#undo-btn:not(:disabled):hover,
+#mute-btn:hover {
   background: rgba(110, 231, 245, 0.18);
 }
 
-#hint-btn:disabled {
+#hint-btn:disabled,
+#undo-btn:disabled {
   opacity: 0.55;
 }
 

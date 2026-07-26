@@ -37,6 +37,8 @@ export interface UICallbacks {
   onSelectLevel: (id: number) => void;
   onOpenLevelSelect: () => void;
   onHint: () => void;
+  onUndo: () => void;
+  onToggleMute: () => void;
 }
 
 export class UIManager {
@@ -59,6 +61,8 @@ export class UIManager {
   private hintBtn = document.getElementById('hint-btn')! as HTMLButtonElement;
   private hintArrow = document.getElementById('hint-arrow')!;
   private hintToast = document.getElementById('hint-toast')!;
+  private undoBtn = document.getElementById('undo-btn')! as HTMLButtonElement;
+  private muteBtn = document.getElementById('mute-btn')! as HTMLButtonElement;
 
   private goalCubeCells = new Map<string, HTMLDivElement>();
   private relationItems: HTMLDivElement[] = [];
@@ -75,6 +79,8 @@ export class UIManager {
     this.levelsBtn.addEventListener('click', () => this.callbacks.onOpenLevelSelect());
     this.closeLevelSelectBtn.addEventListener('click', () => this.levelSelectOverlay.classList.add('hidden'));
     this.hintBtn.addEventListener('click', () => this.callbacks.onHint());
+    this.undoBtn.addEventListener('click', () => this.callbacks.onUndo());
+    this.muteBtn.addEventListener('click', () => this.callbacks.onToggleMute());
 
     window.setTimeout(() => this.swipeHint.classList.add('hidden'), 4000);
   }
@@ -100,6 +106,7 @@ export class UIManager {
     this.hintArrow.classList.add('hidden');
     this.hintToast.classList.add('hidden');
     this.setHintLoading(false);
+    this.setUndoAvailable(false);
   }
 
   private buildGoalDiagram(level: LevelData) {
@@ -207,6 +214,15 @@ export class UIManager {
     window.clearTimeout(this.hintToastTimeout);
     this.hintToast.classList.remove('hidden');
     this.hintToastTimeout = window.setTimeout(() => this.hintToast.classList.add('hidden'), HINT_TOAST_MS);
+  }
+
+  setUndoAvailable(available: boolean) {
+    this.undoBtn.disabled = !available;
+  }
+
+  setMuted(muted: boolean) {
+    this.muteBtn.textContent = muted ? '🔇' : '🔊';
+    this.muteBtn.title = muted ? 'Unmute sound' : 'Mute sound';
   }
 
   renderLevelSelect(levels: LevelData[], currentId: number) {

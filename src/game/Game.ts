@@ -5,6 +5,7 @@ import { computeStep } from './MovementSolver';
 import { evaluateFormation } from './formation';
 import { HintManager } from './HintManager';
 import { SoundManager } from './SoundManager';
+import { HapticsManager } from './HapticsManager';
 import { LEVELS, getLevel } from './levels';
 import { CellType, CubeState, Direction, LevelData } from './types';
 
@@ -26,6 +27,7 @@ export class Game {
   private ui: UIManager;
   private hints = new HintManager();
   private sounds = new SoundManager();
+  private haptics = new HapticsManager();
   private level!: LevelData;
   private cubes: CubeState[] = [];
   private history: HistoryEntry[] = [];
@@ -106,12 +108,14 @@ export class Game {
 
     if (!moved) {
       this.sounds.playBump();
+      this.haptics.playBump();
       this.input.setEnabled(false);
       this.scene.animateCubesTo(positions, blockedIds, dir, () => this.input.setEnabled(true));
       return;
     }
 
     this.sounds.playMove();
+    this.haptics.playMove();
     this.history.push({ cubes: this.cubes, dir });
     this.ui.setUndoAvailable(true);
     this.cubes = positions;
@@ -150,6 +154,7 @@ export class Game {
       this.ui.setHintLoading(false);
       if (direction) {
         this.sounds.playHintFound();
+        this.haptics.playHintFound();
         this.ui.showHintDirection(direction);
       } else {
         this.sounds.playHintUnavailable();
@@ -167,6 +172,7 @@ export class Game {
     this.moves = Math.max(0, this.moves - 1);
     this.ui.setMoves(this.moves);
     this.sounds.playUndo();
+    this.haptics.playUndo();
     this.input.setEnabled(false);
 
     // No cube is "blocked" here — every cube is placed exactly back where it
@@ -179,7 +185,10 @@ export class Game {
 
   private refreshFormationStatus(): boolean {
     const status = evaluateFormation(this.cubes, this.level.goal);
-    if (status.satisfiedEdges.size > this.satisfiedCount) this.sounds.playBondConnect();
+    if (status.satisfiedEdges.size > this.satisfiedCount) {
+      this.sounds.playBondConnect();
+      this.haptics.playBondConnect();
+    }
     this.satisfiedCount = status.satisfiedEdges.size;
     this.ui.updateFormationStatus(status);
     this.scene.setGlowingCubes(status.glowingCubeIds);
@@ -190,12 +199,14 @@ export class Game {
   private handleFail() {
     this.failed = true;
     this.sounds.playFail();
+    this.haptics.playFail();
     this.ui.showFail();
   }
 
   private handleWin() {
     this.won = true;
     this.sounds.playWin();
+    this.haptics.playWin();
     this.scene.playWinCelebration(() => {
       this.ui.markCompleted(this.level.id, LEVELS.length);
       this.ui.setNextLevelAvailable(this.level.id < LEVELS.length);

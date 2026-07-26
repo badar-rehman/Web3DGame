@@ -584,3 +584,52 @@ button:not(:disabled):active {
     animation-duration: 0.001ms !important;
   }
 }
+
+/* Narrow phones: drop button text (icons stay) so hud-top wraps to fewer
+   rows, and shrink the goal panel's own padding/text — both push its
+   bottom edge higher, leaving more guaranteed clearance above the board. */
+@media (max-width: 480px) {
+  .btn-label {
+    display: none;
+  }
+
+  #restart-btn,
+  #levels-btn,
+  #hint-btn,
+  #undo-btn,
+  #settings-btn {
+    padding: 8px 10px;
+  }
+
+  #goal-panel {
+    padding: 8px;
+    gap: 5px;
+  }
+
+  #goal-title {
+    font-size: 11px;
+  }
+
+  .goal-cell {
+    width: 18px;
+    height: 18px;
+  }
+
+  .goal-cell.cube {
+    font-size: 11px;
+  }
+
+  .relation-item {
+    font-size: 11px;
+  }
+}
+
+/* Short viewports: cap the goal panel to a fraction of what's actually
+   available instead of a flat 100vh-based number, so a level with a long
+   bond list scrolls internally rather than reaching further down the
+   screen toward the board. */
+@media (max-height: 700px) {
+  #goal-panel {
+    max-height: 34vh;
+  }
+}

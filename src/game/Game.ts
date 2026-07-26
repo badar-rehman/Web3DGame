@@ -6,6 +6,7 @@ import { evaluateFormation } from './formation';
 import { HintManager } from './HintManager';
 import { SoundManager } from './SoundManager';
 import { HapticsManager } from './HapticsManager';
+import { starsForMoves } from './stars';
 import { LEVELS, getLevel } from './levels';
 import { CellType, CubeState, Direction, LevelData } from './types';
 
@@ -207,10 +208,11 @@ export class Game {
     this.won = true;
     this.sounds.playWin();
     this.haptics.playWin();
+    const stars = starsForMoves(this.moves, this.level.par);
     this.scene.playWinCelebration(() => {
-      this.ui.markCompleted(this.level.id, LEVELS.length);
+      this.ui.markCompleted(this.level.id, LEVELS.length, this.moves);
       this.ui.setNextLevelAvailable(this.level.id < LEVELS.length);
-      this.ui.showWin(this.moves);
+      this.ui.showWin(this.moves, stars);
     });
   }
 

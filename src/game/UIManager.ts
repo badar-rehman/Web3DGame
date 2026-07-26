@@ -1,6 +1,7 @@
 import { Direction, LevelData } from './types';
 import { cubeVisual } from './cubeVisuals';
 import { computeRelativeLayout, relationText, FormationStatus } from './formation';
+import { starsForMoves } from './stars';
 
 const HINT_ARROW_MS = 1600;
 const HINT_TOAST_MS = 2200;
@@ -10,16 +11,19 @@ const PROGRESS_KEY = 'cube-shift-progress';
 interface Progress {
   highestUnlocked: number;
   completed: number[];
+  /** Fewest moves ever used to solve each level, keyed by level id — stars are derived from this vs. par. */
+  bestMoves: Record<number, number>;
 }
 
 function loadProgress(): Progress {
   try {
     const raw = localStorage.getItem(PROGRESS_KEY);
-    if (raw) return JSON.parse(raw);
+    // `bestMoves` is defaulted in even for progress saved before it existed.
+    if (raw) return { bestMoves: {}, ...JSON.parse(raw) };
   } catch {
     /* ignore corrupt storage */
   }
-  return { highestUnlocked: 1, completed: [] };
+  return { highestUnlocked: 1, completed: [], bestMoves: {} };
 }
 
 function saveProgress(p: Progress) {
@@ -50,6 +54,7 @@ export class UIManager {
   private levelsBtn = document.getElementById('levels-btn')!;
   private winOverlay = document.getElementById('win-overlay')!;
   private winMoves = document.getElementById('win-moves')!;
+  private winStars = document.getElementById('win-stars')!;
   private nextLevelBtn = document.getElementById('next-level-btn')!;
   private replayLevelBtn = document.getElementById('replay-level-btn')!;
   private failOverlay = document.getElementById('fail-overlay')!;
@@ -89,10 +94,18 @@ export class UIManager {
     return this.progress;
   }
 
-  markCompleted(levelId: number, totalLevels: number) {
+  markCompleted(levelId: number, totalLevels: number, moves: number) {
     if (!this.progress.completed.includes(levelId)) this.progress.completed.push(levelId);
     this.progress.highestUnlocked = Math.min(totalLevels, Math.max(this.progress.highestUnlocked, levelId + 1));
+    const best = this.progress.bestMoves[levelId];
+    if (best === undefined || moves < best) this.progress.bestMoves[levelId] = moves;
     saveProgress(this.progress);
+  }
+
+  /** Stars earned so far for a level, or 0 if it's never been solved. */
+  private starsFor(level: LevelData): 0 | 1 | 2 | 3 {
+    const best = this.progress.bestMoves[level.id];
+    return best === undefined ? 0 : starsForMoves(best, level.par);
   }
 
   showLevel(level: LevelData) {
@@ -177,9 +190,20 @@ export class UIManager {
     this.moveCounter.textContent = `Moves: ${n}`;
   }
 
-  showWin(moves: number) {
+  showWin(moves: number, stars: 1 | 2 | 3) {
     this.winMoves.textContent = `Solved in ${moves} move${moves === 1 ? '' : 's'}`;
+    this.renderStars(this.winStars, stars);
     this.winOverlay.classList.remove('hidden');
+  }
+
+  private renderStars(container: HTMLElement, count: number) {
+    container.innerHTML = '';
+    for (let i = 0; i < 3; i++) {
+      const star = document.createElement('span');
+      star.className = 'star' + (i < count ? ' filled' : '');
+      star.textContent = i < count ? '★' : '☆';
+      container.appendChild(star);
+    }
   }
 
   hideWin() {
@@ -229,11 +253,22 @@ export class UIManager {
     this.levelSelectGrid.innerHTML = '';
     levels.forEach((level) => {
       const btn = document.createElement('button');
-      btn.textContent = String(level.id);
       btn.title = level.name;
+
+      const num = document.createElement('span');
+      num.className = 'level-num';
+      num.textContent = String(level.id);
+      btn.appendChild(num);
+
       const unlocked = level.id <= this.progress.highestUnlocked;
       const completed = this.progress.completed.includes(level.id);
-      if (completed) btn.classList.add('completed');
+      if (completed) {
+        btn.classList.add('completed');
+        const starsRow = document.createElement('div');
+        starsRow.className = 'level-stars';
+        this.renderStars(starsRow, this.starsFor(level));
+        btn.appendChild(starsRow);
+      }
       if (!unlocked) {
         btn.classList.add('locked');
         btn.disabled = true;

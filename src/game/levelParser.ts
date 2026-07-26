@@ -14,6 +14,7 @@ export function parseLevel(
   rows: string[],
   goal: RelationEdge[],
   hasBoundary: boolean,
+  par: number,
 ): LevelData {
   const height = rows.length;
   const width = Math.max(...rows.map((r) => r.length));
@@ -34,5 +35,5 @@ export function parseLevel(
     cells.push(cellRow);
   });
 
-  return { id, name, width, height, cells, cubes, goal, hasBoundary };
+  return { id, name, width, height, cells, cubes, goal, hasBoundary, par };
 }

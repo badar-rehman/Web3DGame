@@ -53,4 +53,6 @@ export interface LevelData {
    * there's no rail — a cube pushed past the edge falls and the level fails.
    */
   hasBoundary: boolean;
+  /** The true optimal (BFS-shortest) move count, precomputed offline — used to award stars. */
+  par: number;
 }

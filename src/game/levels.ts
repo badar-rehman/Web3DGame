@@ -10,11 +10,15 @@ import { parseLevel } from './levelParser';
 // Every layout + goal below has been verified solvable via BFS over the exact
 // move rules used at runtime, including a version that only accepts paths
 // that never push a cube off an open edge (see MovementSolver / formation.ts).
+// `par` is that same BFS's shortest-path length, precomputed offline — the
+// live game never re-solves a level, it just compares the player's move
+// count against this fixed number to award stars.
 interface RawLevel {
   name: string;
   rows: string[];
   goal: RelationEdge[];
   hasBoundary: boolean;
+  par: number;
 }
 
 const RAW_LEVELS: RawLevel[] = [
@@ -23,12 +27,14 @@ const RAW_LEVELS: RawLevel[] = [
     rows: ['.....', '.....', 'A..B.', '.....', '.....'],
     goal: [{ from: 'A', to: 'B', dx: -1, dy: 0 }],
     hasBoundary: true,
+    par: 2,
   },
   {
     name: 'Open Ledge',
     rows: ['......', '......', '.A.B.O', '......'],
     goal: [{ from: 'A', to: 'B', dx: -1, dy: 0 }],
     hasBoundary: false,
+    par: 2,
   },
   {
     name: 'L Formation',
@@ -38,6 +44,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'C', to: 'B', dx: -1, dy: 0 },
     ],
     hasBoundary: true,
+    par: 3,
   },
   {
     name: 'Vertical Chain',
@@ -47,6 +54,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'B', to: 'C', dx: 0, dy: -1 },
     ],
     hasBoundary: true,
+    par: 4,
   },
   {
     name: 'Maze Bond',
@@ -56,6 +64,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'C', to: 'B', dx: 1, dy: 0 },
     ],
     hasBoundary: true,
+    par: 9,
   },
   {
     name: 'Staggered Square',
@@ -66,6 +75,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'D', to: 'C', dx: 0, dy: -1 },
     ],
     hasBoundary: true,
+    par: 16,
   },
   {
     name: 'Full Square',
@@ -77,6 +87,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'D', to: 'A', dx: -1, dy: 0 },
     ],
     hasBoundary: true,
+    par: 19,
   },
   {
     name: 'Fifth Wheel',
@@ -88,6 +99,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'D', to: 'E', dx: 0, dy: -1 },
     ],
     hasBoundary: true,
+    par: 5,
   },
   {
     name: 'Open Trio Plus',
@@ -97,6 +109,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'C', to: 'B', dx: 1, dy: 0 },
     ],
     hasBoundary: false,
+    par: 4,
   },
   {
     name: 'Cross Roads',
@@ -108,6 +121,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'E', to: 'C', dx: -1, dy: 0 },
     ],
     hasBoundary: true,
+    par: 11,
   },
   {
     name: 'Boxed Maze',
@@ -119,6 +133,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'D', to: 'A', dx: -1, dy: 0 },
     ],
     hasBoundary: true,
+    par: 21,
   },
   {
     name: 'Six of One',
@@ -131,6 +146,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'F', to: 'C', dx: 0, dy: 1 },
     ],
     hasBoundary: true,
+    par: 8,
   },
   {
     name: 'Narrow Escape',
@@ -141,6 +157,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'B', to: 'D', dx: -1, dy: 0 },
     ],
     hasBoundary: false,
+    par: 10,
   },
   {
     name: 'Z-Formation',
@@ -151,6 +168,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'D', to: 'C', dx: 1, dy: 0 },
     ],
     hasBoundary: true,
+    par: 13,
   },
   {
     name: 'Six-Cube Square',
@@ -165,6 +183,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'F', to: 'E', dx: 1, dy: 0 },
     ],
     hasBoundary: true,
+    par: 10,
   },
   {
     name: 'Twisting Halls',
@@ -175,6 +194,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'C', to: 'D', dx: 0, dy: -1 },
     ],
     hasBoundary: true,
+    par: 26,
   },
   {
     name: 'Zigzag',
@@ -186,6 +206,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'E', to: 'D', dx: 0, dy: 1 },
     ],
     hasBoundary: true,
+    par: 14,
   },
   {
     name: 'Twin Triangles',
@@ -198,6 +219,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'D', to: 'B', dx: 1, dy: 0 },
     ],
     hasBoundary: true,
+    par: 12,
   },
   {
     name: 'Grand Maze',
@@ -208,6 +230,7 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'B', to: 'C', dx: 1, dy: 0 },
     ],
     hasBoundary: true,
+    par: 11,
   },
   {
     name: 'Final Challenge',
@@ -220,11 +243,12 @@ const RAW_LEVELS: RawLevel[] = [
       { from: 'F', to: 'C', dx: 0, dy: 1 },
     ],
     hasBoundary: false,
+    par: 13,
   },
 ];
 
 export const LEVELS: LevelData[] = RAW_LEVELS.map((raw, i) =>
-  parseLevel(i + 1, raw.name, raw.rows, raw.goal, raw.hasBoundary),
+  parseLevel(i + 1, raw.name, raw.rows, raw.goal, raw.hasBoundary, raw.par),
 );
 
 export function getLevel(id: number): LevelData | undefined {

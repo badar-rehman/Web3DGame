@@ -404,6 +404,25 @@ button:not(:disabled):active {
   margin: 0 0 20px;
 }
 
+#win-stars {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin: 0 0 10px;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.star {
+  color: rgba(255, 255, 255, 0.18);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.star.filled {
+  color: #ffd35c;
+  text-shadow: 0 0 10px rgba(255, 211, 92, 0.6);
+}
+
 #win-actions {
   display: flex;
   gap: 10px;
@@ -465,6 +484,26 @@ button:not(:disabled):active {
 #level-select-grid button {
   aspect-ratio: 1;
   font-size: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.level-num {
+  font-size: 16px;
+}
+
+.level-stars {
+  display: flex;
+  gap: 1px;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.level-stars .star.filled {
+  text-shadow: none;
 }
 
 #level-select-grid button.locked {

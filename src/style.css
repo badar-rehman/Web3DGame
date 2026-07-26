@@ -109,7 +109,7 @@ button:not(:disabled):active {
 #levels-btn,
 #hint-btn,
 #undo-btn,
-#mute-btn {
+#settings-btn {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   backdrop-filter: blur(8px);
@@ -119,7 +119,7 @@ button:not(:disabled):active {
   font-size: 14px;
 }
 
-#mute-btn {
+#settings-btn {
   padding: 8px 12px;
   font-size: 16px;
   line-height: 1;
@@ -129,7 +129,7 @@ button:not(:disabled):active {
 #levels-btn:hover,
 #hint-btn:not(:disabled):hover,
 #undo-btn:not(:disabled):hover,
-#mute-btn:hover {
+#settings-btn:hover {
   background: rgba(110, 231, 245, 0.18);
 }
 
@@ -326,7 +326,8 @@ button:not(:disabled):active {
 
 #win-overlay,
 #fail-overlay,
-#level-select-overlay {
+#level-select-overlay,
+#settings-overlay {
   position: absolute;
   inset: 0;
   background: rgba(5, 7, 14, 0.72);
@@ -343,7 +344,8 @@ button:not(:disabled):active {
 /* These overlays animate out instead of vanishing, so they override the generic .hidden{display:none}. */
 #win-overlay.hidden,
 #fail-overlay.hidden,
-#level-select-overlay.hidden {
+#level-select-overlay.hidden,
+#settings-overlay.hidden {
   display: flex !important;
   opacity: 0;
   visibility: hidden;
@@ -353,7 +355,8 @@ button:not(:disabled):active {
 
 #win-card,
 #fail-card,
-#level-select-card {
+#level-select-card,
+#settings-card {
   background: var(--panel-bg);
   border: 1px solid var(--panel-border);
   border-radius: 16px;
@@ -368,7 +371,8 @@ button:not(:disabled):active {
 
 #win-overlay.hidden #win-card,
 #fail-overlay.hidden #fail-card,
-#level-select-overlay.hidden #level-select-card {
+#level-select-overlay.hidden #level-select-card,
+#settings-overlay.hidden #settings-card {
   opacity: 0;
   transform: scale(0.9) translateY(10px);
   transition: transform 0.16s ease, opacity 0.14s ease;
@@ -453,7 +457,8 @@ button:not(:disabled):active {
   flex-direction: column;
 }
 
-#level-select-header {
+#level-select-header,
+#settings-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -461,15 +466,72 @@ button:not(:disabled):active {
   flex: none;
 }
 
-#level-select-header h2 {
+#level-select-header h2,
+#settings-header h2 {
   margin: 0;
 }
 
-#close-level-select-btn {
+#close-level-select-btn,
+#close-settings-btn {
   background: transparent;
   border: none;
   color: var(--text-dim);
   font-size: 18px;
+}
+
+#settings-card {
+  min-width: 300px;
+  text-align: left;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid var(--panel-border);
+  font-size: 14px;
+}
+
+.settings-row:first-of-type {
+  border-top: none;
+}
+
+.settings-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-border);
+  color: var(--text-dim);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 56px;
+}
+
+.settings-toggle.on {
+  background: linear-gradient(135deg, var(--accent), #4fb8c9);
+  color: #06222a;
+  border-color: transparent;
+}
+
+#settings-reset-btn {
+  background: rgba(245, 113, 110, 0.16);
+  border: 1px solid rgba(245, 113, 110, 0.4);
+  color: #f5716e;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#settings-reset-btn:hover {
+  background: rgba(245, 113, 110, 0.28);
+}
+
+.reduce-motion * {
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
 }
 
 #level-select-grid {

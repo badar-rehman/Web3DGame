@@ -34,6 +34,24 @@ function saveProgress(p: Progress) {
   }
 }
 
+const REDUCED_MOTION_KEY = 'cube-shift-reduced-motion';
+
+function loadReducedMotion(): boolean {
+  try {
+    return localStorage.getItem(REDUCED_MOTION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function saveReducedMotion(enabled: boolean) {
+  try {
+    localStorage.setItem(REDUCED_MOTION_KEY, enabled ? '1' : '0');
+  } catch {
+    /* storage unavailable, ignore */
+  }
+}
+
 export interface UICallbacks {
   onRestart: () => void;
   onNextLevel: () => void;
@@ -67,13 +85,19 @@ export class UIManager {
   private hintArrow = document.getElementById('hint-arrow')!;
   private hintToast = document.getElementById('hint-toast')!;
   private undoBtn = document.getElementById('undo-btn')! as HTMLButtonElement;
-  private muteBtn = document.getElementById('mute-btn')! as HTMLButtonElement;
+  private settingsBtn = document.getElementById('settings-btn')!;
+  private settingsOverlay = document.getElementById('settings-overlay')!;
+  private closeSettingsBtn = document.getElementById('close-settings-btn')!;
+  private soundToggleBtn = document.getElementById('settings-sound-btn')! as HTMLButtonElement;
+  private motionToggleBtn = document.getElementById('settings-motion-btn')! as HTMLButtonElement;
+  private resetProgressBtn = document.getElementById('settings-reset-btn')!;
 
   private goalCubeCells = new Map<string, HTMLDivElement>();
   private relationItems: HTMLDivElement[] = [];
   private progress: Progress;
   private hintArrowTimeout: number | undefined;
   private hintToastTimeout: number | undefined;
+  private reducedMotion = loadReducedMotion();
 
   constructor(private callbacks: UICallbacks) {
     this.progress = loadProgress();
@@ -85,7 +109,14 @@ export class UIManager {
     this.closeLevelSelectBtn.addEventListener('click', () => this.levelSelectOverlay.classList.add('hidden'));
     this.hintBtn.addEventListener('click', () => this.callbacks.onHint());
     this.undoBtn.addEventListener('click', () => this.callbacks.onUndo());
-    this.muteBtn.addEventListener('click', () => this.callbacks.onToggleMute());
+    this.settingsBtn.addEventListener('click', () => this.settingsOverlay.classList.remove('hidden'));
+    this.closeSettingsBtn.addEventListener('click', () => this.settingsOverlay.classList.add('hidden'));
+    this.soundToggleBtn.addEventListener('click', () => this.callbacks.onToggleMute());
+    this.motionToggleBtn.addEventListener('click', () => this.toggleReducedMotion());
+    this.resetProgressBtn.addEventListener('click', () => this.resetProgress());
+
+    this.applyReducedMotion();
+    this.setMotionToggleLabel();
 
     window.setTimeout(() => this.swipeHint.classList.add('hidden'), 4000);
   }
@@ -245,8 +276,36 @@ export class UIManager {
   }
 
   setMuted(muted: boolean) {
-    this.muteBtn.textContent = muted ? '🔇' : '🔊';
-    this.muteBtn.title = muted ? 'Unmute sound' : 'Mute sound';
+    this.soundToggleBtn.textContent = muted ? 'Off' : 'On';
+    this.soundToggleBtn.classList.toggle('on', !muted);
+  }
+
+  private setMotionToggleLabel() {
+    this.motionToggleBtn.textContent = this.reducedMotion ? 'On' : 'Off';
+    this.motionToggleBtn.classList.toggle('on', this.reducedMotion);
+  }
+
+  private applyReducedMotion() {
+    document.documentElement.classList.toggle('reduce-motion', this.reducedMotion);
+  }
+
+  private toggleReducedMotion() {
+    this.reducedMotion = !this.reducedMotion;
+    saveReducedMotion(this.reducedMotion);
+    this.applyReducedMotion();
+    this.setMotionToggleLabel();
+  }
+
+  /** Wipes saved progress (levels unlocked, completed, best-move stars) after a confirm, then reloads fresh. */
+  private resetProgress() {
+    const ok = window.confirm('Reset all progress and stars? This cannot be undone.');
+    if (!ok) return;
+    try {
+      localStorage.removeItem(PROGRESS_KEY);
+    } catch {
+      /* storage unavailable, ignore */
+    }
+    window.location.reload();
   }
 
   renderLevelSelect(levels: LevelData[], currentId: number) {

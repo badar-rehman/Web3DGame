@@ -18,7 +18,7 @@
           <button id="undo-btn" title="Undo last move" disabled>↩ Undo</button>
           <button id="restart-btn" title="Restart level">⟲ Restart</button>
           <button id="levels-btn" title="Level select">☰ Levels</button>
-          <button id="mute-btn" title="Mute sound">🔊</button>
+          <button id="settings-btn" title="Settings">⚙</button>
         </div>
 
         <div id="goal-panel">
@@ -57,6 +57,27 @@
             <button id="close-level-select-btn">✕</button>
           </div>
           <div id="level-select-grid"></div>
+        </div>
+      </div>
+
+      <div id="settings-overlay" class="hidden">
+        <div id="settings-card">
+          <div id="settings-header">
+            <h2>Settings</h2>
+            <button id="close-settings-btn">✕</button>
+          </div>
+          <div class="settings-row">
+            <span>Sound Effects</span>
+            <button id="settings-sound-btn" class="settings-toggle"></button>
+          </div>
+          <div class="settings-row">
+            <span>Reduced Motion</span>
+            <button id="settings-motion-btn" class="settings-toggle"></button>
+          </div>
+          <div class="settings-row">
+            <span>Progress &amp; stars</span>
+            <button id="settings-reset-btn">Reset</button>
+          </div>
         </div>
       </div>
 

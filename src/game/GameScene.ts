@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CellType, CubeState, Direction, DIRECTION_DELTA, LevelData } from './types';
 import { SymbolShape, buildSymbolPath, cubeVisual } from './cubeVisuals';
+import { elevationKind } from './levelRules';
 
 export const CELL_SIZE = 1.5;
 const FLOOR_Y = 0.1;
@@ -497,7 +498,10 @@ export class GameScene {
     const zMin = -0.5 * CELL_SIZE;
     const zMax = (height - 0.5) * CELL_SIZE;
     const yMin = FLOOR_Y - FLOOR_TILE_HEIGHT;
-    const yMax = FLOOR_Y + CUBE_SIZE;
+    // A stacked rider's top surface sits a full CUBE_SIZE above the normal
+    // resting height (always taller than a wall-riding cube, since
+    // WALL_HEIGHT < CUBE_SIZE) — account for it so it's never clipped out of frame.
+    const yMax = FLOOR_Y + CUBE_SIZE + CUBE_SIZE;
 
     const right = new THREE.Vector3();
     const up = new THREE.Vector3();
@@ -665,6 +669,18 @@ export class GameScene {
     }
   }
 
+  /** Extra Y height for a cube currently stacked on its carrier, or riding a Wall cell. */
+  private elevationY(cube: CubeState, cubes: CubeState[]): number {
+    switch (elevationKind(this.level, cube, cubes)) {
+      case 'stacked':
+        return CUBE_SIZE;
+      case 'wall':
+        return WALL_HEIGHT;
+      default:
+        return 0;
+    }
+  }
+
   private buildCubes(cubes: CubeState[]) {
     const bodyGeo = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
 
@@ -733,7 +749,7 @@ export class GameScene {
       });
 
       const { wx, wz } = this.toWorld(cube.x, cube.y);
-      group.position.set(wx, FLOOR_Y + CUBE_SIZE / 2, wz);
+      group.position.set(wx, FLOOR_Y + CUBE_SIZE / 2 + this.elevationY(cube, cubes), wz);
       this.levelGroup.add(group);
 
       const glowDecalMaterial = new THREE.MeshBasicMaterial({
@@ -811,7 +827,8 @@ export class GameScene {
 
       const falling = this.isOutOfBounds(pos);
       const { wx, wz } = this.toWorld(pos.x, pos.y);
-      const to = new THREE.Vector3(wx, FLOOR_Y + CUBE_SIZE / 2, wz);
+      const lift = falling ? 0 : this.elevationY(pos, positions);
+      const to = new THREE.Vector3(wx, FLOOR_Y + CUBE_SIZE / 2 + lift, wz);
       this.cubeAnims.set(pos.id, {
         phase: falling ? 'slide' : 'move',
         from: entry.group.position.clone(),

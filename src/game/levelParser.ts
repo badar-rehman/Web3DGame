@@ -15,6 +15,7 @@ export function parseLevel(
   goal: RelationEdge[],
   hasBoundary: boolean,
   par: number,
+  stackedPair?: { carrier: string; rider: string },
 ): LevelData {
   const height = rows.length;
   const width = Math.max(...rows.map((r) => r.length));
@@ -35,5 +36,12 @@ export function parseLevel(
     cells.push(cellRow);
   });
 
-  return { id, name, width, height, cells, cubes, goal, hasBoundary, par };
+  // The rider never appears in `rows` — it starts coincident with its
+  // carrier, placed here rather than authored as its own grid character.
+  if (stackedPair) {
+    const carrierCube = cubes.find((c) => c.id === stackedPair.carrier);
+    if (carrierCube) cubes.push({ id: stackedPair.rider, x: carrierCube.x, y: carrierCube.y });
+  }
+
+  return { id, name, width, height, cells, cubes, goal, hasBoundary, par, stackedPair };
 }

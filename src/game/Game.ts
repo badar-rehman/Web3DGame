@@ -3,12 +3,13 @@ import { InputController } from './InputController';
 import { UIManager } from './UIManager';
 import { computeStep } from './MovementSolver';
 import { evaluateFormation } from './formation';
+import { isBlockedInLevel, isDesignatedPair, isElevatedInLevel } from './levelRules';
 import { HintManager } from './HintManager';
 import { SoundManager } from './SoundManager';
 import { HapticsManager } from './HapticsManager';
 import { starsForMoves } from './stars';
 import { LEVELS, getLevel } from './levels';
-import { CellType, CubeState, Direction, LevelData } from './types';
+import { CubeState, Direction, LevelData } from './types';
 
 const OPPOSITE_DIRECTION: Record<Direction, Direction> = {
   up: 'down',
@@ -63,11 +64,13 @@ export class Game {
     this.loop();
   }
 
-  private isBlocked = (x: number, y: number): boolean => {
-    if (x < 0 || y < 0 || x >= this.level.width || y >= this.level.height) return this.level.hasBoundary;
-    const cell = this.level.cells[y][x];
-    return cell === CellType.Wall || cell === CellType.Obstacle;
-  };
+  private isBlocked = (x: number, y: number, elevated: boolean): boolean =>
+    isBlockedInLevel(this.level, x, y, elevated);
+
+  private isElevated = (cube: CubeState, cubes: CubeState[]): boolean =>
+    isElevatedInLevel(this.level, cube, cubes);
+
+  private isDesignatedPair = (a: string, b: string): boolean => isDesignatedPair(this.level, a, b);
 
   private isOutOfBounds(pos: CubeState): boolean {
     return pos.x < 0 || pos.y < 0 || pos.x >= this.level.width || pos.y >= this.level.height;
@@ -99,7 +102,10 @@ export class Game {
   private handleDirection(dir: Direction) {
     if (this.won || this.failed || this.scene.isAnimating()) return;
 
-    const { positions, moved } = computeStep(this.cubes, dir, { isBlocked: this.isBlocked });
+    const { positions, moved } = computeStep(this.cubes, dir, { isBlocked: this.isBlocked }, {
+      isElevated: this.isElevated,
+      isDesignatedPair: this.isDesignatedPair,
+    });
     // Every cube attempts to move each swipe — one that ends up exactly
     // where it started was blocked by a wall, obstacle, edge, or another
     // cube, and gets a little "tried and couldn't" bump instead of nothing.

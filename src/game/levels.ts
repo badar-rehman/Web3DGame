@@ -19,6 +19,8 @@ interface RawLevel {
   goal: RelationEdge[];
   hasBoundary: boolean;
   par: number;
+  /** v1 stacking mechanic: the rider starts coincident with the carrier, and must NOT also appear as a letter in `rows`. */
+  stackedPair?: { carrier: string; rider: string };
 }
 
 const RAW_LEVELS: RawLevel[] = [
@@ -245,10 +247,20 @@ const RAW_LEVELS: RawLevel[] = [
     hasBoundary: false,
     par: 13,
   },
+  {
+    name: 'Over the Wall',
+    rows: ['.......', '.A##.C#', '.......'],
+    goal: [{ from: 'B', to: 'C', dx: -1, dy: 0 }],
+    hasBoundary: true,
+    par: 3,
+    // B rides on A from the start (never appears in `rows`). Pushing right
+    // wedges A against the wall while B climbs over it and lands beside C.
+    stackedPair: { carrier: 'A', rider: 'B' },
+  },
 ];
 
 export const LEVELS: LevelData[] = RAW_LEVELS.map((raw, i) =>
-  parseLevel(i + 1, raw.name, raw.rows, raw.goal, raw.hasBoundary, raw.par),
+  parseLevel(i + 1, raw.name, raw.rows, raw.goal, raw.hasBoundary, raw.par, raw.stackedPair),
 );
 
 export function getLevel(id: number): LevelData | undefined {

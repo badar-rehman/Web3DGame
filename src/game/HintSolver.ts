@@ -1,6 +1,7 @@
 import { computeStep } from './MovementSolver';
 import { evaluateFormation } from './formation';
-import { CellType, CubeState, Direction, LevelData } from './types';
+import { isBlockedInLevel, isDesignatedPair, isElevatedInLevel } from './levelRules';
+import { CubeState, Direction, LevelData } from './types';
 
 const DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
 const MAX_TIME_MS = 4000;
@@ -25,11 +26,9 @@ interface Node {
  * to finish in time — both are reported the same way: no hint available).
  */
 export function findNextHintMove(cubes: CubeState[], level: LevelData): Direction | null {
-  const isBlocked = (x: number, y: number): boolean => {
-    if (x < 0 || y < 0 || x >= level.width || y >= level.height) return level.hasBoundary;
-    const cell = level.cells[y][x];
-    return cell === CellType.Wall || cell === CellType.Obstacle;
-  };
+  const isBlocked = (x: number, y: number, elevated: boolean): boolean => isBlockedInLevel(level, x, y, elevated);
+  const isElevated = (cube: CubeState, cubes: CubeState[]): boolean => isElevatedInLevel(level, cube, cubes);
+  const isPair = (a: string, b: string): boolean => isDesignatedPair(level, a, b);
   const isOutOfBounds = (p: CubeState) => p.x < 0 || p.y < 0 || p.x >= level.width || p.y >= level.height;
 
   if (evaluateFormation(cubes, level.goal).solved) return null;
@@ -40,7 +39,7 @@ export function findNextHintMove(cubes: CubeState[], level: LevelData): Directio
   // Depth 1: expand the root once per direction, tagging each branch with
   // the move that started it — every node below inherits that same tag.
   for (const dir of DIRECTIONS) {
-    const { positions, moved } = computeStep(cubes, dir, { isBlocked });
+    const { positions, moved } = computeStep(cubes, dir, { isBlocked }, { isElevated, isDesignatedPair: isPair });
     if (!moved || positions.some(isOutOfBounds)) continue;
     const k = stateKey(positions);
     if (visited.has(k)) continue;
@@ -63,7 +62,10 @@ export function findNextHintMove(cubes: CubeState[], level: LevelData): Directio
 
     const node = queue[i++];
     for (const dir of DIRECTIONS) {
-      const { positions, moved } = computeStep(node.cubes, dir, { isBlocked });
+      const { positions, moved } = computeStep(node.cubes, dir, { isBlocked }, {
+        isElevated,
+        isDesignatedPair: isPair,
+      });
       if (!moved || positions.some(isOutOfBounds)) continue;
       const k = stateKey(positions);
       if (visited.has(k)) continue;

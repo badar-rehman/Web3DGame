@@ -55,4 +55,6 @@ export interface LevelData {
   hasBoundary: boolean;
   /** The true optimal (BFS-shortest) move count, precomputed offline — used to award stars. */
   par: number;
+  /** v1 stacking mechanic: the one rider cube that starts coincident with (riding) the carrier cube. Static level metadata, never mutated during play. */
+  stackedPair?: { carrier: string; rider: string };
 }

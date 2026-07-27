@@ -30,7 +30,7 @@ export function findNextHintMove(cubes: CubeState[], level: LevelData): Directio
   const isElevated = (cube: CubeState, cubes: CubeState[]): boolean => isElevatedInLevel(level, cube, cubes);
   const isOutOfBounds = (p: CubeState) => p.x < 0 || p.y < 0 || p.x >= level.width || p.y >= level.height;
 
-  if (evaluateFormation(cubes, level.goal).solved) return null;
+  if (evaluateFormation(cubes, level.goal, isElevated).solved) return null;
 
   const visited = new Set<string>([stateKey(cubes)]);
   const queue: Node[] = [];
@@ -43,7 +43,7 @@ export function findNextHintMove(cubes: CubeState[], level: LevelData): Directio
     const k = stateKey(positions);
     if (visited.has(k)) continue;
     visited.add(k);
-    if (evaluateFormation(positions, level.goal).solved) return dir;
+    if (evaluateFormation(positions, level.goal, isElevated).solved) return dir;
     queue.push({ cubes: positions, firstMove: dir });
   }
 
@@ -66,7 +66,7 @@ export function findNextHintMove(cubes: CubeState[], level: LevelData): Directio
       const k = stateKey(positions);
       if (visited.has(k)) continue;
       visited.add(k);
-      if (evaluateFormation(positions, level.goal).solved) return node.firstMove;
+      if (evaluateFormation(positions, level.goal, isElevated).solved) return node.firstMove;
       queue.push({ cubes: positions, firstMove: node.firstMove });
     }
 

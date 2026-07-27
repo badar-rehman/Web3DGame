@@ -188,7 +188,7 @@ export class Game {
   }
 
   private refreshFormationStatus(): boolean {
-    const status = evaluateFormation(this.cubes, this.level.goal);
+    const status = evaluateFormation(this.cubes, this.level.goal, this.isElevated);
     if (status.satisfiedEdges.size > this.satisfiedCount) {
       this.sounds.playBondConnect();
       this.haptics.playBondConnect();

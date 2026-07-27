@@ -27,9 +27,16 @@ function addDirection(map: Map<string, Set<Direction>>, id: string, dir: Directi
 /**
  * Checks the current cube positions against the goal's relative bonds.
  * The formation is translation-invariant — only the relationships between
- * cubes matter, not where they sit on the board.
+ * cubes matter, not where they sit on the board. A cube currently elevated
+ * (stacked on another cube, or riding a Wall cell) can never satisfy a bond
+ * — it isn't actually resting on the ground plane with its partner, even if
+ * their x/y happen to line up.
  */
-export function evaluateFormation(cubes: CubeState[], goal: RelationEdge[]): FormationStatus {
+export function evaluateFormation(
+  cubes: CubeState[],
+  goal: RelationEdge[],
+  isElevated: (cube: CubeState, cubes: CubeState[]) => boolean = () => false,
+): FormationStatus {
   const byId = new Map(cubes.map((c) => [c.id, c]));
   const satisfiedEdges = new Set<number>();
   const glowingCubeIds = new Set<string>();
@@ -39,6 +46,7 @@ export function evaluateFormation(cubes: CubeState[], goal: RelationEdge[]): For
     const from = byId.get(edge.from);
     const to = byId.get(edge.to);
     if (!from || !to) return;
+    if (isElevated(from, cubes) || isElevated(to, cubes)) return;
     if (from.x - to.x === edge.dx && from.y - to.y === edge.dy) {
       satisfiedEdges.add(i);
       glowingCubeIds.add(edge.from);

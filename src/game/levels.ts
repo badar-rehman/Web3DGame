@@ -126,6 +126,77 @@ const RAW_LEVELS: RawLevel[] = [
     par: 11,
   },
   {
+    name: 'Over the Wall',
+    rows: ['.A.', '.#.', '..C'],
+    goal: [
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'B', to: 'C', dx: 0, dy: -1 },
+    ],
+    hasBoundary: true,
+    par: 2,
+    // B rides on A from the start (never appears in `rows`). Down: A is
+    // blocked by the single wall cell below it and stays put, but B
+    // (elevated) climbs over it. Right: A steps sideways onto floor while B —
+    // still on the wall — steps sideways too and lands on ordinary floor
+    // beyond it, grounding out. Both ended up shifted the same way, so they
+    // land in the same column, one row apart, directly above C. All three
+    // finish genuinely on the ground in one gapless vertical column — B
+    // never has to rest on the wall itself to satisfy the goal.
+    stackedPair: { carrier: 'A', rider: 'B' },
+  },
+  {
+    name: 'Double Crossing',
+    rows: ['A.', '..', '#.', '.C'],
+    goal: [
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'B', to: 'C', dx: 0, dy: -1 },
+    ],
+    hasBoundary: true,
+    par: 3,
+    // Same trick as "Over the Wall," but with a floor cell before the wall
+    // now, so the split happens one row later than the player might expect
+    // from the first stacking level. Down, down, right — still a clean
+    // gapless A-B-C column at the end.
+    stackedPair: { carrier: 'A', rider: 'B' },
+  },
+  {
+    name: 'New Ride',
+    rows: ['.A.', '...', '.C.', '.#.', '...'],
+    goal: [
+      { from: 'A', to: 'C', dx: 0, dy: -1 },
+      { from: 'B', to: 'C', dx: 0, dy: 2 },
+    ],
+    hasBoundary: true,
+    par: 4,
+    // C starts 2 cells below A — not adjacent yet. Down, down: A becomes
+    // blocked directly by C itself (an ordinary cube, not a wall) — B,
+    // elevated, mounts C right there, its first-ever transfer straight from
+    // one cube to another rather than off a wall. Down, down again: A stays
+    // put (still blocked by C), but B — still elevated from having been
+    // coincident with C — rides over the wall below C and grounds out two
+    // rows past it. The one-row gap between C and B in the goal panel is the
+    // unavoidable footprint of that crossing (a cube can never end up
+    // adjacent to something it just separated from over a wall) — everything
+    // else in the game stays gapless; this is the one level that explains why.
+    stackedPair: { carrier: 'A', rider: 'B' },
+  },
+  {
+    name: 'Detour',
+    rows: ['.A..', '.O#.', '...C'],
+    goal: [
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'B', to: 'C', dx: 0, dy: -1 },
+    ],
+    hasBoundary: true,
+    par: 3,
+    // Pushing straight down first hits the Obstacle directly below A — it
+    // blocks everyone, elevated or not, so that path is dead. Right, then
+    // down: A is blocked by the Wall instead (Obstacle's neighbor), while B
+    // climbs it, exactly as usual. Right again: both shift sideways, landing
+    // a clean gapless A-B-C column beside where the Obstacle sat.
+    stackedPair: { carrier: 'A', rider: 'B' },
+  },
+  {
     name: 'Boxed Maze',
     rows: ['A.#...D', '..#.#..', '..#.#..', '.......', '..#.#..', '..#.#..', 'B.#...C'],
     goal: [
@@ -246,25 +317,6 @@ const RAW_LEVELS: RawLevel[] = [
     ],
     hasBoundary: false,
     par: 13,
-  },
-  {
-    name: 'Over the Wall',
-    rows: ['.A.', '.#.', '..C'],
-    goal: [
-      { from: 'A', to: 'B', dx: 0, dy: -1 },
-      { from: 'B', to: 'C', dx: 0, dy: -1 },
-    ],
-    hasBoundary: true,
-    par: 2,
-    // B rides on A from the start (never appears in `rows`). Down: A is
-    // blocked by the single wall cell below it and stays put, but B
-    // (elevated) climbs over it. Right: A steps sideways onto floor while B —
-    // still on the wall — steps sideways too and lands on ordinary floor
-    // beyond it, grounding out. Both ended up shifted the same way, so they
-    // land in the same column, one row apart, directly above C. All three
-    // finish genuinely on the ground in one gapless vertical column — B
-    // never has to rest on the wall itself to satisfy the goal.
-    stackedPair: { carrier: 'A', rider: 'B' },
   },
 ];
 

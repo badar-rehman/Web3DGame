@@ -249,21 +249,21 @@ const RAW_LEVELS: RawLevel[] = [
   },
   {
     name: 'Over the Wall',
-    rows: ['........', 'D.A##.C#', '........'],
+    rows: ['.A.', '.#C', '..#', '...'],
     goal: [
-      { from: 'A', to: 'D', dx: 1, dy: 0 },
-      { from: 'B', to: 'C', dx: -1, dy: 0 },
-      { from: 'D', to: 'C', dx: -5, dy: 0 },
+      { from: 'A', to: 'C', dx: 0, dy: -1 },
+      { from: 'B', to: 'C', dx: 0, dy: 1 },
     ],
     hasBoundary: true,
     par: 3,
-    // B rides on A from the start (never appears in `rows`). D starts 2 cells
-    // behind A — not yet adjacent — so it only catches up (and only the
-    // D-C bond spanning the whole level) after the first push, never before.
-    // Pushing right wedges A against the wall (permanently blocking D behind
-    // it too) while B climbs over and lands beside C. All three bonds chain
-    // through D and C into one connected formation (A-D-C-B), matching every
-    // other level's convention instead of two separate disconnected pairs.
+    // B rides on A from the start (never appears in `rows`). Down: A is
+    // blocked by the wall below it, but B (elevated) climbs onto it. Right:
+    // A moves to sit directly above C; B, still on the wall, mounts C (C is
+    // pinned by the boundary to its right). Down again: A stays put (blocked
+    // by C below it), C stays put (blocked by its own wall below), but B —
+    // still elevated — climbs past that wall to land directly below C. All
+    // three end up touching in one tight vertical column, not spread across
+    // the level with a gap between two separate pairs.
     stackedPair: { carrier: 'A', rider: 'B' },
   },
 ];

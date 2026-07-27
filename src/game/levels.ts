@@ -249,21 +249,21 @@ const RAW_LEVELS: RawLevel[] = [
   },
   {
     name: 'Over the Wall',
-    rows: ['.A.', '.#C', '..#', '...'],
+    rows: ['.A.', '.#.', '..C'],
     goal: [
-      { from: 'A', to: 'C', dx: 0, dy: -1 },
-      { from: 'B', to: 'C', dx: 0, dy: 1 },
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'B', to: 'C', dx: 0, dy: -1 },
     ],
     hasBoundary: true,
-    par: 3,
+    par: 2,
     // B rides on A from the start (never appears in `rows`). Down: A is
-    // blocked by the wall below it, but B (elevated) climbs onto it. Right:
-    // A moves to sit directly above C; B, still on the wall, mounts C (C is
-    // pinned by the boundary to its right). Down again: A stays put (blocked
-    // by C below it), C stays put (blocked by its own wall below), but B —
-    // still elevated — climbs past that wall to land directly below C. All
-    // three end up touching in one tight vertical column, not spread across
-    // the level with a gap between two separate pairs.
+    // blocked by the single wall cell below it and stays put, but B
+    // (elevated) climbs over it. Right: A steps sideways onto floor while B —
+    // still on the wall — steps sideways too and lands on ordinary floor
+    // beyond it, grounding out. Both ended up shifted the same way, so they
+    // land in the same column, one row apart, directly above C. All three
+    // finish genuinely on the ground in one gapless vertical column — B
+    // never has to rest on the wall itself to satisfy the goal.
     stackedPair: { carrier: 'A', rider: 'B' },
   },
 ];

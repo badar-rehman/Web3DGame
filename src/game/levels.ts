@@ -160,24 +160,20 @@ const RAW_LEVELS: RawLevel[] = [
     stackedPair: { carrier: 'A', rider: 'B' },
   },
   {
-    name: 'New Ride',
-    rows: ['.A.', '...', '.C.', '.#.', '...'],
+    name: 'Long Way Round',
+    rows: ['.A..', '.O..', '..#.', '....', '...C'],
     goal: [
-      { from: 'A', to: 'C', dx: 0, dy: -1 },
-      { from: 'B', to: 'C', dx: 0, dy: 2 },
+      { from: 'A', to: 'B', dx: 0, dy: -1 },
+      { from: 'B', to: 'C', dx: 0, dy: -1 },
     ],
     hasBoundary: true,
-    par: 4,
-    // C starts 2 cells below A — not adjacent yet. Down, down: A becomes
-    // blocked directly by C itself (an ordinary cube, not a wall) — B,
-    // elevated, mounts C right there, its first-ever transfer straight from
-    // one cube to another rather than off a wall. Down, down again: A stays
-    // put (still blocked by C), but B — still elevated from having been
-    // coincident with C — rides over the wall below C and grounds out two
-    // rows past it. The one-row gap between C and B in the goal panel is the
-    // unavoidable footprint of that crossing (a cube can never end up
-    // adjacent to something it just separated from over a wall) — everything
-    // else in the game stays gapless; this is the one level that explains why.
+    par: 5,
+    // Obstacle forces a detour right before the pair can descend. Down,
+    // down: A is blocked by the wall two rows below and stops there; B,
+    // elevated, rides across it. Right: B shifts off the wall onto plain
+    // floor, grounding out. Down: both drop into place next to C — a clean
+    // gapless A-B-C column, same "climb one wall, shift sideways" trick as
+    // the other stacking levels, just with more navigation around it.
     stackedPair: { carrier: 'A', rider: 'B' },
   },
   {

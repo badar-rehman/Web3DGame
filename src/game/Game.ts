@@ -21,6 +21,7 @@ const OPPOSITE_DIRECTION: Record<Direction, Direction> = {
 interface HistoryEntry {
   cubes: CubeState[];
   dir: Direction;
+  movePhase: number;
 }
 
 export class Game {
@@ -34,6 +35,7 @@ export class Game {
   private cubes: CubeState[] = [];
   private history: HistoryEntry[] = [];
   private moves = 0;
+  private movePhase = 0;
   private satisfiedCount = 0;
   private won = false;
   private failed = false;
@@ -65,10 +67,10 @@ export class Game {
   }
 
   private isBlocked = (x: number, y: number, elevated: boolean): boolean =>
-    isBlockedInLevel(this.level, x, y, elevated);
+    isBlockedInLevel(this.level, x, y, elevated, this.movePhase);
 
   private isElevated = (cube: CubeState, cubes: CubeState[]): boolean =>
-    isElevatedInLevel(this.level, cube, cubes);
+    isElevatedInLevel(this.level, cube, cubes, this.movePhase);
 
   private isOutOfBounds(pos: CubeState): boolean {
     return pos.x < 0 || pos.y < 0 || pos.x >= this.level.width || pos.y >= this.level.height;
@@ -80,6 +82,7 @@ export class Game {
     this.cubes = level.cubes.map((c) => ({ ...c }));
     this.history = [];
     this.moves = 0;
+    this.movePhase = 0;
     this.satisfiedCount = 0;
     this.won = false;
     this.failed = false;
@@ -120,12 +123,14 @@ export class Game {
 
     this.sounds.playMove();
     this.haptics.playMove();
-    this.history.push({ cubes: this.cubes, dir });
+    this.history.push({ cubes: this.cubes, dir, movePhase: this.movePhase });
     this.ui.setUndoAvailable(true);
     this.cubes = positions;
     this.moves += 1;
+    this.movePhase = 1 - this.movePhase;
     this.ui.setMoves(this.moves);
     this.input.setEnabled(false);
+    this.scene.setMovePhase(this.movePhase);
 
     const fell = positions.some((p) => this.isOutOfBounds(p));
 
@@ -147,7 +152,7 @@ export class Game {
 
     const requestedLevelId = this.level.id;
     const cubesSnapshot = this.cubes.map((c) => ({ ...c }));
-    this.hints.requestHint(cubesSnapshot, this.level).then((direction) => {
+    this.hints.requestHint(cubesSnapshot, this.level, this.movePhase).then((direction) => {
       this.hintPending = false;
       // The player may have restarted, switched levels, or already won by
       // the time this resolves — a stale hint would be actively misleading.
@@ -174,7 +179,9 @@ export class Game {
     this.ui.setUndoAvailable(this.history.length > 0);
     this.cubes = entry.cubes;
     this.moves = Math.max(0, this.moves - 1);
+    this.movePhase = entry.movePhase;
     this.ui.setMoves(this.moves);
+    this.scene.setMovePhase(this.movePhase);
     this.sounds.playUndo();
     this.haptics.playUndo();
     this.input.setEnabled(false);

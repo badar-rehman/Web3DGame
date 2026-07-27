@@ -1,12 +1,16 @@
 import { CellType, LevelData, RelationEdge } from './types';
 import { CUBE_PALETTE } from './cubeVisuals';
 
-// '.' floor · '#' wall · 'O' obstacle · any letter in CUBE_PALETTE (A, B, C, ...) is a cube start
+// '.' floor · '#' wall · 'O' obstacle · '^'/'v' elevator (starts up/down) ·
+// any letter in CUBE_PALETTE (A, B, C, ...) is a cube start
 const CHAR_TO_CELL: Record<string, CellType> = {
   '.': CellType.Floor,
   '#': CellType.Wall,
   O: CellType.Obstacle,
 };
+
+// value = the tile's phase at move 0 (true = starts up/wall, false = starts down/floor)
+const ELEVATOR_CHARS: Record<string, boolean> = { '^': true, v: false };
 
 export function parseLevel(
   id: number,
@@ -21,6 +25,7 @@ export function parseLevel(
   const width = Math.max(...rows.map((r) => r.length));
   const cells: CellType[][] = [];
   const cubes: LevelData['cubes'] = [];
+  const elevatorTiles: NonNullable<LevelData['elevatorTiles']> = [];
 
   rows.forEach((row, y) => {
     const cellRow: CellType[] = [];
@@ -29,6 +34,11 @@ export function parseLevel(
       if (ch in CUBE_PALETTE) {
         cellRow.push(CellType.Floor);
         cubes.push({ id: ch, x, y });
+      } else if (ch in ELEVATOR_CHARS) {
+        // Placeholder base type — the effective type is never read raw for
+        // an elevator cell, it's always derived from elevatorTiles + phase.
+        cellRow.push(CellType.Floor);
+        elevatorTiles.push({ x, y, startsUp: ELEVATOR_CHARS[ch] });
       } else {
         cellRow.push(CHAR_TO_CELL[ch] ?? CellType.Floor);
       }
@@ -43,5 +53,17 @@ export function parseLevel(
     if (carrierCube) cubes.push({ id: stackedPair.rider, x: carrierCube.x, y: carrierCube.y });
   }
 
-  return { id, name, width, height, cells, cubes, goal, hasBoundary, par, stackedPair };
+  return {
+    id,
+    name,
+    width,
+    height,
+    cells,
+    cubes,
+    goal,
+    hasBoundary,
+    par,
+    stackedPair,
+    elevatorTiles: elevatorTiles.length ? elevatorTiles : undefined,
+  };
 }

@@ -30,13 +30,13 @@ export class HintManager {
     return true;
   }
 
-  requestHint(cubes: CubeState[], level: LevelData): Promise<Direction | null> {
+  requestHint(cubes: CubeState[], level: LevelData, movePhase: number): Promise<Direction | null> {
     // Superseding a still-pending request resolves it with null rather than
     // leaving it dangling, so callers awaiting it don't hang.
     this.pending?.resolve(null);
 
     const requestId = this.nextRequestId++;
-    const request: HintRequest = { requestId, cubes, level };
+    const request: HintRequest = { requestId, cubes, level, movePhase };
     return new Promise((resolve) => {
       this.pending = { requestId, resolve };
       this.worker.postMessage(request);

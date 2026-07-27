@@ -314,6 +314,20 @@ const RAW_LEVELS: RawLevel[] = [
     hasBoundary: false,
     par: 13,
   },
+  {
+    name: 'Rise and Fall',
+    rows: ['.A.', '.v.', '.#.', '...', '.C.'],
+    goal: [{ from: 'A', to: 'C', dx: 0, dy: -1 }],
+    hasBoundary: true,
+    par: 3,
+    // Elevator tile debut: starts down (floor), so A walks onto it freely on
+    // the first push. That same move's completion flips it up, and A --
+    // never designated a "rider," just an ordinary cube standing on a cell
+    // that happened to become a Wall under it -- rides up for free. Elevated
+    // now, it crosses the plain static Wall below (which would have blocked
+    // it otherwise) on the second push, then steps off onto floor and
+    // grounds out on the third, landing directly above C.
+  },
 ];
 
 export const LEVELS: LevelData[] = RAW_LEVELS.map((raw, i) =>

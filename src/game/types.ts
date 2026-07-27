@@ -57,4 +57,6 @@ export interface LevelData {
   par: number;
   /** v1 stacking mechanic: the one rider cube that starts coincident with (riding) the carrier cube. Static level metadata, never mutated during play. */
   stackedPair?: { carrier: string; rider: string };
+  /** Cells that toggle Floor <-> Wall on every completed move, sharing one clock. `startsUp` is each tile's phase at move 0; static level metadata, never mutated during play. */
+  elevatorTiles?: { x: number; y: number; startsUp: boolean }[];
 }

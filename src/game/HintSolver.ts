@@ -7,12 +7,13 @@ const DIRECTIONS: Direction[] = ['up', 'down', 'left', 'right'];
 const MAX_TIME_MS = 4000;
 const MAX_DEPTH = 60;
 
-function stateKey(cubes: CubeState[]): string {
-  return cubes.map((c) => `${c.x},${c.y}`).join('|');
+function stateKey(cubes: CubeState[], movePhase: number): string {
+  return cubes.map((c) => `${c.x},${c.y}`).join('|') + '#' + (movePhase % 2);
 }
 
 interface Node {
   cubes: CubeState[];
+  movePhase: number;
   /** Which direction was swiped first, at the root of this node's path — the move a hint should show. */
   firstMove: Direction;
 }
@@ -25,26 +26,32 @@ interface Node {
  * time/depth budget (either truly unsolvable from here, or just too large
  * to finish in time — both are reported the same way: no hint available).
  */
-export function findNextHintMove(cubes: CubeState[], level: LevelData): Direction | null {
-  const isBlocked = (x: number, y: number, elevated: boolean): boolean => isBlockedInLevel(level, x, y, elevated);
-  const isElevated = (cube: CubeState, cubes: CubeState[]): boolean => isElevatedInLevel(level, cube, cubes);
+export function findNextHintMove(cubes: CubeState[], level: LevelData, movePhase: number): Direction | null {
+  const isBlockedAt = (phase: number) => (x: number, y: number, elevated: boolean): boolean =>
+    isBlockedInLevel(level, x, y, elevated, phase);
+  const isElevatedAt = (phase: number) => (cube: CubeState, cubes: CubeState[]): boolean =>
+    isElevatedInLevel(level, cube, cubes, phase);
   const isOutOfBounds = (p: CubeState) => p.x < 0 || p.y < 0 || p.x >= level.width || p.y >= level.height;
 
-  if (evaluateFormation(cubes, level.goal, isElevated).solved) return null;
+  const isElevatedRoot = isElevatedAt(movePhase);
+  if (evaluateFormation(cubes, level.goal, isElevatedRoot).solved) return null;
 
-  const visited = new Set<string>([stateKey(cubes)]);
+  const visited = new Set<string>([stateKey(cubes, movePhase)]);
   const queue: Node[] = [];
 
   // Depth 1: expand the root once per direction, tagging each branch with
   // the move that started it — every node below inherits that same tag.
+  const nextPhase = 1 - (movePhase % 2);
+  const isBlockedRoot = isBlockedAt(movePhase);
+  const isElevatedNext = isElevatedAt(nextPhase);
   for (const dir of DIRECTIONS) {
-    const { positions, moved } = computeStep(cubes, dir, { isBlocked }, { isElevated });
+    const { positions, moved } = computeStep(cubes, dir, { isBlocked: isBlockedRoot }, { isElevated: isElevatedRoot });
     if (!moved || positions.some(isOutOfBounds)) continue;
-    const k = stateKey(positions);
+    const k = stateKey(positions, nextPhase);
     if (visited.has(k)) continue;
     visited.add(k);
-    if (evaluateFormation(positions, level.goal, isElevated).solved) return dir;
-    queue.push({ cubes: positions, firstMove: dir });
+    if (evaluateFormation(positions, level.goal, isElevatedNext).solved) return dir;
+    queue.push({ cubes: positions, movePhase: nextPhase, firstMove: dir });
   }
 
   const start = Date.now();
@@ -60,14 +67,18 @@ export function findNextHintMove(cubes: CubeState[], level: LevelData): Directio
     }
 
     const node = queue[i++];
+    const isBlocked = isBlockedAt(node.movePhase);
+    const isElevated = isElevatedAt(node.movePhase);
+    const childPhase = 1 - (node.movePhase % 2);
+    const isElevatedChild = isElevatedAt(childPhase);
     for (const dir of DIRECTIONS) {
       const { positions, moved } = computeStep(node.cubes, dir, { isBlocked }, { isElevated });
       if (!moved || positions.some(isOutOfBounds)) continue;
-      const k = stateKey(positions);
+      const k = stateKey(positions, childPhase);
       if (visited.has(k)) continue;
       visited.add(k);
-      if (evaluateFormation(positions, level.goal, isElevated).solved) return node.firstMove;
-      queue.push({ cubes: positions, firstMove: node.firstMove });
+      if (evaluateFormation(positions, level.goal, isElevatedChild).solved) return node.firstMove;
+      queue.push({ cubes: positions, movePhase: childPhase, firstMove: node.firstMove });
     }
 
     if ((i & 2047) === 0 && Date.now() - start > MAX_TIME_MS) return null;

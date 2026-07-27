@@ -103,9 +103,24 @@ const COLOR = {
   wall: 0x4b5580,
   obstacle: 0x8a6a45,
   gridLine: 0xffffff,
+  elevator: 0x59c9ff,
 };
 
+const ELEVATOR_MOVE_MS = 260;
+
+/** Smooth mechanical ease for the elevator platform, distinct from the cubes' springy overshoot. */
+function easeInOutQuad(t: number): number {
+  return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+}
+
 type AnimPhase = 'move' | 'slide' | 'hang' | 'drop' | 'bump-out' | 'bump-back';
+
+interface ElevatorAnim {
+  from: number;
+  to: number;
+  start: number;
+  duration: number;
+}
 
 interface CubeAnim {
   phase: AnimPhase;
@@ -346,6 +361,9 @@ export class GameScene {
   private camera!: THREE.OrthographicCamera;
   private cubes = new Map<string, CubeEntry>();
   private cubeAnims = new Map<string, CubeAnim>();
+  private elevatorMeshes = new Map<string, THREE.Mesh>();
+  private elevatorAnims = new Map<string, ElevatorAnim>();
+  private movePhase = 0;
   private glowingIds = new Set<string>();
   private directionalGlow = new Map<string, Set<Direction>>();
   private level!: LevelData;
@@ -555,6 +573,9 @@ export class GameScene {
   loadLevel(level: LevelData, cubes: CubeState[]) {
     this.level = level;
     this.cubeAnims.clear();
+    this.elevatorAnims.clear();
+    this.elevatorMeshes.clear();
+    this.movePhase = 0;
     this.glowingIds.clear();
     this.animating = false;
     this.celebrating = false;
@@ -568,9 +589,25 @@ export class GameScene {
 
     this.buildFloor();
     this.buildWallsAndObstacles();
+    this.buildElevators();
     if (level.hasBoundary) this.buildBoundaryPipe();
     this.buildCubes(cubes);
     this.frameCameraToLevel();
+  }
+
+  /** Called by Game.ts right after its own move-phase clock flips (real move completed) or is restored (undo). */
+  setMovePhase(movePhase: number) {
+    this.movePhase = movePhase;
+    const now = performance.now();
+    (this.level.elevatorTiles ?? []).forEach((tile) => {
+      const key = `${tile.x},${tile.y}`;
+      const mesh = this.elevatorMeshes.get(key);
+      if (!mesh) return;
+      const up = (movePhase % 2 === 0) === tile.startsUp;
+      const targetY = FLOOR_Y + (up ? WALL_HEIGHT / 2 : -WALL_HEIGHT / 2);
+      if (Math.abs(mesh.position.y - targetY) < 0.001) return;
+      this.elevatorAnims.set(key, { from: mesh.position.y, to: targetY, start: now, duration: ELEVATOR_MOVE_MS });
+    });
   }
 
   private buildFloor() {
@@ -645,9 +682,11 @@ export class GameScene {
     const wallMat = new THREE.MeshStandardMaterial({ map: SIDE_TEXTURES.base, color: COLOR.wall, roughness: 0.7 });
     const obstacleGeo = new THREE.IcosahedronGeometry(CELL_SIZE * 0.34, 0);
     const obstacleMat = new THREE.MeshStandardMaterial({ color: COLOR.obstacle, roughness: 0.8, flatShading: true });
+    const elevatorKeys = new Set((this.level.elevatorTiles ?? []).map((t) => `${t.x},${t.y}`));
 
     for (let y = 0; y < this.level.height; y++) {
       for (let x = 0; x < this.level.width; x++) {
+        if (elevatorKeys.has(`${x},${y}`)) continue; // dynamic terrain, built by buildElevators() instead
         const cell = this.level.cells[y][x];
         const { wx, wz } = this.toWorld(x, y);
 
@@ -669,9 +708,32 @@ export class GameScene {
     }
   }
 
-  /** Extra Y height for a cube currently stacked on its carrier, or riding a Wall cell. */
+  /** Elevator tiles: an animated platform per tile, positioned per its starting phase. Toggled via setMovePhase(). */
+  private buildElevators() {
+    const geo = new THREE.BoxGeometry(CELL_SIZE, WALL_HEIGHT, CELL_SIZE);
+    const mat = new THREE.MeshStandardMaterial({
+      map: SIDE_TEXTURES.base,
+      color: COLOR.elevator,
+      emissive: new THREE.Color(COLOR.elevator),
+      emissiveIntensity: 0.35,
+      roughness: 0.5,
+    });
+
+    (this.level.elevatorTiles ?? []).forEach((tile) => {
+      const { wx, wz } = this.toWorld(tile.x, tile.y);
+      const platform = new THREE.Mesh(geo, mat);
+      const y = FLOOR_Y + (tile.startsUp ? WALL_HEIGHT / 2 : -WALL_HEIGHT / 2);
+      platform.position.set(wx, y, wz);
+      platform.castShadow = true;
+      platform.receiveShadow = true;
+      this.levelGroup.add(platform);
+      this.elevatorMeshes.set(`${tile.x},${tile.y}`, platform);
+    });
+  }
+
+  /** Extra Y height for a cube currently stacked on its carrier, or riding a Wall cell (static or an up-phase Elevator tile). */
   private elevationY(cube: CubeState, cubes: CubeState[]): number {
-    switch (elevationKind(this.level, cube, cubes)) {
+    switch (elevationKind(this.level, cube, cubes, this.movePhase)) {
       case 'stacked':
         return CUBE_SIZE;
       case 'wall':
@@ -905,6 +967,20 @@ export class GameScene {
     }
   }
 
+  private updateElevators(now: number) {
+    if (this.elevatorAnims.size === 0) return;
+    for (const [key, anim] of [...this.elevatorAnims]) {
+      const mesh = this.elevatorMeshes.get(key);
+      if (!mesh) {
+        this.elevatorAnims.delete(key);
+        continue;
+      }
+      const t = Math.max(0, Math.min(1, (now - anim.start) / anim.duration));
+      mesh.position.y = anim.from + (anim.to - anim.from) * easeInOutQuad(t);
+      if (t >= 1) this.elevatorAnims.delete(key);
+    }
+  }
+
   private updateGlow(now: number) {
     if (this.celebrating) {
       // Rhythmic pulses (bypassing the normal per-cube tween) — each pulse
@@ -993,6 +1069,7 @@ export class GameScene {
     const deltaSeconds = Math.min(0.1, (now - this.lastFrameTime) / 1000);
     this.lastFrameTime = now;
     this.updateAnims(now);
+    this.updateElevators(now);
     this.updateGlow(now);
     this.updateBackground(now, deltaSeconds);
     this.renderer.render(this.scene, this.camera);

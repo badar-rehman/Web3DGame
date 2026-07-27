@@ -673,10 +673,11 @@ export class GameScene {
       const baseColor = new THREE.Color(visual.color);
       const group = new THREE.Group();
 
+      const topTex = getTopTextures(visual.symbol);
       const makeSideMat = () =>
         new THREE.MeshStandardMaterial({
-          map: SIDE_TEXTURES.base,
-          emissiveMap: SIDE_TEXTURES.emissive,
+          map: topTex.base,
+          emissiveMap: topTex.emissive,
           emissive: baseColor,
           emissiveIntensity: 0,
           color: baseColor,
@@ -685,7 +686,8 @@ export class GameScene {
         });
       // A separate material per cardinal side, so a satisfied bond only
       // lights up the specific face that touches its partner — not the
-      // whole cube.
+      // whole cube. Reuses the same border+symbol texture as the top face
+      // so the cube's symbol reads from every visible angle, not just from above.
       const sideMaterials: Record<Direction, THREE.MeshStandardMaterial> = {
         right: makeSideMat(),
         left: makeSideMat(),
@@ -693,7 +695,6 @@ export class GameScene {
         up: makeSideMat(),
       };
 
-      const topTex = getTopTextures(visual.symbol);
       // Base color map tints the near-white carved texture to this cube's
       // hue; emissiveMap masks the glow to just the carved lines/outline.
       const topMat = new THREE.MeshStandardMaterial({

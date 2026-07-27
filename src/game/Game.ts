@@ -3,7 +3,7 @@ import { InputController } from './InputController';
 import { UIManager } from './UIManager';
 import { computeStep } from './MovementSolver';
 import { evaluateFormation } from './formation';
-import { isBlockedInLevel, isDesignatedPair, isElevatedInLevel } from './levelRules';
+import { isBlockedInLevel, isElevatedInLevel } from './levelRules';
 import { HintManager } from './HintManager';
 import { SoundManager } from './SoundManager';
 import { HapticsManager } from './HapticsManager';
@@ -70,8 +70,6 @@ export class Game {
   private isElevated = (cube: CubeState, cubes: CubeState[]): boolean =>
     isElevatedInLevel(this.level, cube, cubes);
 
-  private isDesignatedPair = (a: string, b: string): boolean => isDesignatedPair(this.level, a, b);
-
   private isOutOfBounds(pos: CubeState): boolean {
     return pos.x < 0 || pos.y < 0 || pos.x >= this.level.width || pos.y >= this.level.height;
   }
@@ -104,7 +102,6 @@ export class Game {
 
     const { positions, moved } = computeStep(this.cubes, dir, { isBlocked: this.isBlocked }, {
       isElevated: this.isElevated,
-      isDesignatedPair: this.isDesignatedPair,
     });
     // Every cube attempts to move each swipe — one that ends up exactly
     // where it started was blocked by a wall, obstacle, edge, or another

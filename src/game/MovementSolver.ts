@@ -7,8 +7,6 @@ export interface GridQuery {
 export interface ComputeStepOptions<T> {
   /** Is this cube currently riding (not blocked by Wall)? Defaults to "never" — every existing level is unaffected. */
   isElevated?: (cube: T, cubes: T[]) => boolean;
-  /** Are these two ids the level's one authored carrier/rider pair? Only consulted when they were already coincident at turn start. Defaults to "never". */
-  isDesignatedPair?: (idA: string, idB: string) => boolean;
 }
 
 export interface SlideResult<T extends Vec2> {
@@ -27,9 +25,8 @@ function key(v: Vec2): string {
  * of travel are resolved first, so a cube that can't move (e.g. blocked by a
  * wall) correctly blocks the cube behind it from moving into its cell too.
  *
- * Elevation and "who started this turn where" are frozen from the
- * pre-mutation `cubes` array before the loop runs, never recomputed
- * mid-loop — this is what keeps the stacked-pair collision exception below
+ * Elevation is frozen from the pre-mutation `cubes` array before the loop
+ * runs, never recomputed mid-loop — this keeps the collision exception below
  * independent of processing order (see MovementSolver's stacking design).
  */
 export function computeStep<T extends Vec2 & { id: string }>(
@@ -39,7 +36,6 @@ export function computeStep<T extends Vec2 & { id: string }>(
   options: ComputeStepOptions<T> = {},
 ): SlideResult<T> {
   const isElevated = options.isElevated ?? (() => false);
-  const isDesignatedPair = options.isDesignatedPair ?? (() => false);
 
   const delta = DIRECTION_DELTA[direction];
   const order = cubes
@@ -52,12 +48,11 @@ export function computeStep<T extends Vec2 & { id: string }>(
     });
 
   const elevatedFlags = new Map<string, boolean>(cubes.map((c) => [c.id, isElevated(c, cubes)]));
-  const startKeyById = new Map<string, string>(cubes.map((c) => [c.id, key(c)]));
 
   const positions: T[] = cubes.map((c) => ({ ...c }));
   // Cell -> ids of cubes currently there. A cell can briefly hold 2 ids only
-  // for a still-coincident stacked pair; everywhere else this behaves exactly
-  // like the old Set<string> of occupied keys.
+  // when exactly one of them is elevated; everywhere else this behaves
+  // exactly like the old Set<string> of occupied keys.
   const occupied = new Map<string, Set<string>>();
   for (const c of cubes) {
     if (!occupied.has(key(c))) occupied.set(key(c), new Set());
@@ -71,15 +66,14 @@ export function computeStep<T extends Vec2 & { id: string }>(
 
     const next = { x: start.x + delta.x, y: start.y + delta.y };
     const occupants = occupied.get(key(next));
-    const collisionBlocked = occupants
-      ? [...occupants].some((otherId) => {
-          const sameCellAtTurnStart = startKeyById.get(id) === startKeyById.get(otherId);
-          const excused = sameCellAtTurnStart && isDesignatedPair(id, otherId);
-          return !excused;
-        })
-      : false;
+    const idElevated = elevatedFlags.get(id)!;
+    // Two cubes may share a cell iff exactly one of them is elevated —
+    // ground-ground always blocks; elevated-ground is always excused,
+    // regardless of whether they were already coincident this turn (that's
+    // what lets a rider mount a cube it hasn't ridden before).
+    const collisionBlocked = occupants ? [...occupants].some((otherId) => elevatedFlags.get(otherId) === idElevated) : false;
 
-    const blocked = grid.isBlocked(next.x, next.y, elevatedFlags.get(id)!) || collisionBlocked;
+    const blocked = grid.isBlocked(next.x, next.y, idElevated) || collisionBlocked;
     const final: T = blocked ? start : { ...start, x: next.x, y: next.y };
 
     positions[idx] = final;

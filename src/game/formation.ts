@@ -59,14 +59,20 @@ export function evaluateFormation(cubes: CubeState[], goal: RelationEdge[]): For
   };
 }
 
-/** Human-readable description of a bond, for the HUD checklist. Uses each cube's symbol, never its internal letter id. */
+/**
+ * Human-readable description of a bond, for the HUD checklist. Uses each
+ * cube's symbol, never its internal letter id. Same-row/same-column bonds
+ * read as "left of"/"above" etc. regardless of exact distance — most bonds
+ * are unit-distance, but a bond linking two otherwise-separate groups into
+ * one connected formation may span further, and should still read naturally.
+ */
 export function relationText(edge: RelationEdge): string {
   const from = cubeVisual(edge.from).glyph;
   const to = cubeVisual(edge.to).glyph;
-  if (edge.dx === 0 && edge.dy === -1) return `${from} above ${to}`;
-  if (edge.dx === 0 && edge.dy === 1) return `${from} below ${to}`;
-  if (edge.dx === -1 && edge.dy === 0) return `${from} left of ${to}`;
-  if (edge.dx === 1 && edge.dy === 0) return `${from} right of ${to}`;
+  if (edge.dx === 0 && edge.dy < 0) return `${from} above ${to}`;
+  if (edge.dx === 0 && edge.dy > 0) return `${from} below ${to}`;
+  if (edge.dy === 0 && edge.dx < 0) return `${from} left of ${to}`;
+  if (edge.dy === 0 && edge.dx > 0) return `${from} right of ${to}`;
   return `${from} at (${edge.dx}, ${edge.dy}) from ${to}`;
 }
 

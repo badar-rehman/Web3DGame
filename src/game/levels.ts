@@ -249,16 +249,21 @@ const RAW_LEVELS: RawLevel[] = [
   },
   {
     name: 'Over the Wall',
-    rows: ['.......', 'DA##.C#', '.......'],
+    rows: ['........', 'D.A##.C#', '........'],
     goal: [
       { from: 'A', to: 'D', dx: 1, dy: 0 },
       { from: 'B', to: 'C', dx: -1, dy: 0 },
+      { from: 'D', to: 'C', dx: -5, dy: 0 },
     ],
     hasBoundary: true,
     par: 3,
-    // B rides on A from the start (never appears in `rows`). Pushing right
-    // wedges A against the wall (permanently blocking D behind it too) while
-    // B climbs over and lands beside C — every cube ends up load-bearing.
+    // B rides on A from the start (never appears in `rows`). D starts 2 cells
+    // behind A — not yet adjacent — so it only catches up (and only the
+    // D-C bond spanning the whole level) after the first push, never before.
+    // Pushing right wedges A against the wall (permanently blocking D behind
+    // it too) while B climbs over and lands beside C. All three bonds chain
+    // through D and C into one connected formation (A-D-C-B), matching every
+    // other level's convention instead of two separate disconnected pairs.
     stackedPair: { carrier: 'A', rider: 'B' },
   },
 ];

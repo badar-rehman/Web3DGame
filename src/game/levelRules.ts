@@ -3,17 +3,19 @@ import { CellType, CubeState, LevelData } from './types';
 export type ElevationKind = 'ground' | 'wall' | 'stacked';
 
 /**
- * Whether `cube` is currently riding: still stacked on its carrier (only
- * relevant while they remain coincident), or standing on a Wall cell (either
- * mid-crossing, or permanently after separating from its carrier there).
- * Purely derived from the current positions + level geometry — never stored.
+ * Whether `cube` is currently riding: coincident with any other cube (only
+ * the level's one designated rider can ever be elevated, so there's no
+ * ambiguity about which of two coincident cubes is "on top"), or standing on
+ * a Wall cell. A rider can freely mount a different ground cube than its
+ * original carrier, or transfer straight from one cube to another, or from a
+ * wall onto any cube it meets — purely derived from current positions +
+ * level geometry, never stored.
  */
 export function elevationKind(level: LevelData, cube: CubeState, cubes: CubeState[]): ElevationKind {
   const pair = level.stackedPair;
-  if (pair && cube.id === pair.rider) {
-    const carrier = cubes.find((c) => c.id === pair.carrier);
-    if (carrier && carrier.x === cube.x && carrier.y === cube.y) return 'stacked';
-  }
+  if (!pair || cube.id !== pair.rider) return 'ground';
+  const coincidentWithAny = cubes.some((c) => c.id !== cube.id && c.x === cube.x && c.y === cube.y);
+  if (coincidentWithAny) return 'stacked';
   if (level.cells[cube.y]?.[cube.x] === CellType.Wall) return 'wall';
   return 'ground';
 }
@@ -34,11 +36,4 @@ export function isBlockedInLevel(level: LevelData, x: number, y: number, elevate
   if (cell === CellType.Obstacle) return true;
   if (cell === CellType.Wall) return !elevated;
   return false;
-}
-
-/** Order-independent: true iff idA/idB (in either order) are the level's one authored carrier/rider pair. */
-export function isDesignatedPair(level: LevelData, idA: string, idB: string): boolean {
-  const pair = level.stackedPair;
-  if (!pair) return false;
-  return (idA === pair.carrier && idB === pair.rider) || (idA === pair.rider && idB === pair.carrier);
 }

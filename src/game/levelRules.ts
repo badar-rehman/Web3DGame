@@ -22,9 +22,14 @@ export function isElevatedInLevel(level: LevelData, cube: CubeState, cubes: Cube
   return elevationKind(level, cube, cubes) !== 'ground';
 }
 
-/** Obstacle blocks everyone; Wall blocks only non-elevated cubes; the boundary rule is unaffected by elevation. */
+/**
+ * Obstacle blocks everyone. Wall and the outer boundary pipe both block only
+ * non-elevated cubes — an elevated cube climbs over either one, so a rider
+ * pushed toward an enclosed level's edge goes over the boundary and falls off
+ * exactly like it would on an open edge, rather than stopping there.
+ */
 export function isBlockedInLevel(level: LevelData, x: number, y: number, elevated: boolean): boolean {
-  if (x < 0 || y < 0 || x >= level.width || y >= level.height) return level.hasBoundary;
+  if (x < 0 || y < 0 || x >= level.width || y >= level.height) return level.hasBoundary && !elevated;
   const cell = level.cells[y][x];
   if (cell === CellType.Obstacle) return true;
   if (cell === CellType.Wall) return !elevated;

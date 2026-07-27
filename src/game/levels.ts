@@ -249,12 +249,16 @@ const RAW_LEVELS: RawLevel[] = [
   },
   {
     name: 'Over the Wall',
-    rows: ['.......', '.A##.C#', '.......'],
-    goal: [{ from: 'B', to: 'C', dx: -1, dy: 0 }],
+    rows: ['.......', 'DA##.C#', '.......'],
+    goal: [
+      { from: 'A', to: 'D', dx: 1, dy: 0 },
+      { from: 'B', to: 'C', dx: -1, dy: 0 },
+    ],
     hasBoundary: true,
     par: 3,
     // B rides on A from the start (never appears in `rows`). Pushing right
-    // wedges A against the wall while B climbs over it and lands beside C.
+    // wedges A against the wall (permanently blocking D behind it too) while
+    // B climbs over and lands beside C — every cube ends up load-bearing.
     stackedPair: { carrier: 'A', rider: 'B' },
   },
 ];

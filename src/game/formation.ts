@@ -73,7 +73,11 @@ export function relationText(edge: RelationEdge): string {
 /**
  * Lays out every cube referenced by the goal on a small relative grid (one
  * cube is pinned at the origin, the rest follow the bond offsets), for
- * drawing the goal preview diagram in the HUD.
+ * drawing the goal preview diagram in the HUD. A goal can reference more than
+ * one independent bonded group with no edge directly linking them (e.g. two
+ * separate pairs) — each such connected component gets its own BFS layout,
+ * stacked in additional rows below the previous one, so every cube the goal
+ * mentions still appears in the preview instead of only the first group.
  */
 export function computeRelativeLayout(goal: RelationEdge[]): Map<string, Vec2> {
   const adjacency = new Map<string, { neighbor: string; dx: number; dy: number }[]>();
@@ -89,17 +93,39 @@ export function computeRelativeLayout(goal: RelationEdge[]): Map<string, Vec2> {
   const positions = new Map<string, Vec2>();
   if (goal.length === 0) return positions;
 
-  const root = goal[0].to;
-  positions.set(root, { x: 0, y: 0 });
-  const queue = [root];
-  while (queue.length) {
-    const current = queue.shift()!;
-    const currentPos = positions.get(current)!;
-    for (const { neighbor, dx, dy } of adjacency.get(current) ?? []) {
-      if (positions.has(neighbor)) continue;
-      positions.set(neighbor, { x: currentPos.x + dx, y: currentPos.y + dy });
-      queue.push(neighbor);
+  const allIds: string[] = [];
+  const seenIds = new Set<string>();
+  goal.forEach((edge) => {
+    for (const id of [edge.to, edge.from]) {
+      if (!seenIds.has(id)) {
+        seenIds.add(id);
+        allIds.push(id);
+      }
     }
+  });
+
+  let rowOffset = 0;
+  for (const startId of allIds) {
+    if (positions.has(startId)) continue;
+
+    const componentPositions = new Map<string, Vec2>();
+    componentPositions.set(startId, { x: 0, y: 0 });
+    const queue = [startId];
+    while (queue.length) {
+      const current = queue.shift()!;
+      const currentPos = componentPositions.get(current)!;
+      for (const { neighbor, dx, dy } of adjacency.get(current) ?? []) {
+        if (componentPositions.has(neighbor)) continue;
+        componentPositions.set(neighbor, { x: currentPos.x + dx, y: currentPos.y + dy });
+        queue.push(neighbor);
+      }
+    }
+
+    const ys = [...componentPositions.values()].map((p) => p.y);
+    const minY = Math.min(...ys);
+    componentPositions.forEach((pos, id) => positions.set(id, { x: pos.x, y: pos.y - minY + rowOffset }));
+    rowOffset += Math.max(...ys) - minY + 2; // +1 blank row gap between components
   }
+
   return positions;
 }

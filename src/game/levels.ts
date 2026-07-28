@@ -328,6 +328,53 @@ const RAW_LEVELS: RawLevel[] = [
     // it otherwise) on the second push, then steps off onto floor and
     // grounds out on the third, landing directly above C.
   },
+  {
+    name: 'Free Ride',
+    rows: ['.A#B', 'Ov..', '....'],
+    goal: [{ from: 'B', to: 'A', dx: 1, dy: 0 }],
+    hasBoundary: true,
+    par: 2,
+    // A rides the tile up on the first push (same as "Rise and Fall"), but
+    // there's no wall to cross here -- instead, B's own push on the second
+    // move is what flips the tile back down. A never moves that turn (an
+    // Obstacle pins it in place), so it just sinks back to the ground as a
+    // side effect of a completely unrelated cube's move -- the tile ticks on
+    // every move in the level, not just moves that touch it.
+  },
+  {
+    name: 'Offset Rise',
+    rows: ['A..', '^..', 'v..', '...', 'C..'],
+    goal: [{ from: 'A', to: 'C', dx: 0, dy: -1 }],
+    hasBoundary: true,
+    par: 4,
+    // Two Elevator tiles stacked back to back, starting in opposite phases,
+    // so they're always opposite one another from here on -- never both
+    // floor, never both Wall. The upper one starts up, blocking A outright
+    // until some other move flips it down first; nudging C (already pinned
+    // near its goal spot) up and back does the job. A then rides both tiles
+    // in one continuous descent, elevated the whole way through.
+  },
+  {
+    name: 'Detour and Rise',
+    rows: ['A.', 'O.', '#v', '##', '#.', '#C'],
+    goal: [{ from: 'A', to: 'C', dx: 0, dy: -1 }],
+    hasBoundary: true,
+    par: 5,
+    // An Obstacle forces A sideways before it can even reach the tile's
+    // column -- everything below that point funnels through a single
+    // corridor (the other column is walled off floor to floor) so there's
+    // no way to shortcut around the climb.
+  },
+  {
+    name: 'Elevator Maze',
+    rows: ['.A.', '.O.', 'O..', '##v', '###', '##.', '##C'],
+    goal: [{ from: 'A', to: 'C', dx: 0, dy: -1 }],
+    hasBoundary: true,
+    par: 7,
+    // The hardest of the set: a short zigzag around two Obstacles before the
+    // climb even starts, then the same funnel-and-wall crossing as "Detour
+    // and Rise." Longest solve of any Elevator level so far.
+  },
 ];
 
 export const LEVELS: LevelData[] = RAW_LEVELS.map((raw, i) =>
